@@ -1,0 +1,2 @@
+UPCs contains the unit performance curves (UPCs) under the form of an array of the size 51x1001 with all the NaN values.
+There are 51 levels of head groing from 0.5*head_max to 1*head_max and 1001 levels of power going from zero to P_rated.
