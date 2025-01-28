@@ -48,217 +48,51 @@ flow = torch.tensor([-10.24, -10.14, -10.12, -10.11, -10.11, -10.18, -9.79, 5.55
 head_init = 77.0 # Initial head value
 v_low_init = h_to_v_low_fitted(head_init) # Initial lower reservoir volume
 
-# %% Define pipeline class
-
-class OptiLayer:
-    def __init__(self, time_horizon, operational_cost, head_min, head_max, 
-                v_low_init, v_low_target, pos_min_fit, pos_max_fit, neg_min_fit, neg_max_fit):
-        # Existing parameters
-        self.time_horizon = time_horizon
-        self.operational_cost = operational_cost
-        self.head_min = head_min
-        self.head_max = head_max
-        self.v_low_init = v_low_init
-        self.v_low_target = v_low_target
-        self.pos_min_fit = pos_min_fit
-        self.pos_max_fit = pos_max_fit
-        self.neg_min_fit = neg_min_fit
-        self.neg_max_fit = neg_max_fit
-        
-        # Build the layer once during initialization
-        self.layer = None
-        self.power_init = None
-        self.head_init = None
-        self.q_init = None
-
-    def initialize_layer(self, power, head, flow):
-        if self.layer is None or not torch.all(power == self.power_init) or not torch.all(head == self.head_init):
-            self.power_init = power.detach()
-            self.head_init = head.detach()
-            self.q_init = flow.detach()
-            self.layer = self._build_cvxpy()
-
-    def _build_cvxpy(self):
-        """
-        Private method to build the CVXPY problem with symbolic parameters
-        
-        Returns:
-            CvxpyLayer: Parametrized optimization layer
-        """
-        # Define variables
-        p = cp.Variable(self.time_horizon)
-        q = cp.Variable(self.time_horizon)
-        h = cp.Variable(self.time_horizon)
-        v_low = cp.Variable(self.time_horizon)
-        
-        # Define parameters
-        DA_price = cp.Parameter(self.time_horizon)
-        c_param = cp.Parameter(self.time_horizon)
-        d_param = cp.Parameter(self.time_horizon)
-        e_param = cp.Parameter(self.time_horizon)
-        a_param = cp.Parameter(self.time_horizon)
-        b_param = cp.Parameter(self.time_horizon)
-        w_p_param = cp.Parameter(self.time_horizon, nonneg=True)
-        w_h_param = cp.Parameter(self.time_horizon, nonneg=True)
-        w_q_param = cp.Parameter(self.time_horizon, nonneg=True)
-
-        # Warm start with initial values
-        p.value = [float(x) for x in self.power_init]
-        h.value = [float(x) for x in self.head_init]
-        
-        # Original objective terms
-        revenue = DA_price @ p
-        operational_costs = self.operational_cost * cp.sum_squares(p)
-        
-        # Penalty terms for deviations - using parameters instead of initial values
-        power_deviation_penalty = cp.sum(w_p_param @ cp.square(p - self.power_init))
-        head_deviation_penalty = cp.sum(w_h_param @ cp.square(h - self.head_init))
-        flow_deviation_penalty = cp.sum(w_q_param @ cp.square(q - self.q_init))
-        
-        # Combined objective with penalties
-        objective = cp.Maximize(revenue - operational_costs 
-                              - power_deviation_penalty 
-                              - head_deviation_penalty 
-                              - flow_deviation_penalty)
-        
-        # check objective is DPP
-        assert power_deviation_penalty.is_dpp()
-        assert head_deviation_penalty.is_dpp()
-        assert flow_deviation_penalty.is_dpp()
-        assert objective.is_dpp()
-
-        
-        # Constraints
-        constraints = []
-        for t in range(self.time_horizon):
-            # Power bounds based on mode
-            if self.power_init[t] == 0:  # Idle mode
-                constraints += [p[t] == 0, q[t] == 0]
-            elif self.power_init[t] >= 0:  # Turbine mode
-                constraints += [
-                    p[t] >= self.pos_min_fit[0] * h[t] + self.pos_min_fit[1],
-                    p[t] <= self.pos_max_fit[0] * h[t] + self.pos_max_fit[1],
-                    q[t] == c_param[t] * p[t] + d_param[t] * h[t] + e_param[t]
-                ]
-            else:  # Pump mode
-                constraints += [
-                    p[t] >= self.neg_min_fit[0] * h[t] + self.neg_min_fit[1],
-                    p[t] <= self.neg_max_fit[0] * h[t] + self.neg_max_fit[1],
-                    q[t] == c_param[t] * p[t] + d_param[t] * h[t] + e_param[t]
-                ]
-            
-            # Head limits and trust region constraints
-            constraints += [
-                h[t] >= self.head_min,
-                h[t] <= self.head_max,
-                v_low[t] == a_param[t] * h[t] + b_param[t]
-            ]
-            
-            # Volume balance constraints
-            if t == 0:
-                constraints += [v_low[0] == self.v_low_init + q[0] * 3600]
-            else:
-                constraints += [v_low[t] == v_low[t-1] + q[t] * 3600]
-        
-        # Final volume constraint
-        constraints += [v_low[self.time_horizon-1] <= self.v_low_target]
-        
-        prob = cp.Problem(objective, constraints)
-        assert prob.is_dpp()
-        
-        params = [DA_price, c_param, d_param, e_param, a_param, b_param, 
-                 w_p_param, w_h_param, w_q_param]
-        variables = [p, q, h, v_low]
-        
-        return CvxpyLayer(prob, parameters=params, variables=variables)
-
-    def forward(self, DA_prices, c, d, e, a, b, power, head, flow, w_p, w_h, w_q):
-        """
-        Forward pass through the optimization layer
-        
-        Args:
-            DA_prices (torch.Tensor): Day-ahead prices [time_horizon]
-            c, d, e (torch.Tensor): UPC regression coefficients [time_horizon]
-            a, b (torch.Tensor): v_low regression coefficients [time_horizon]
-            power (torch.Tensor): Initial power schedule [time_horizon]
-            head (torch.Tensor): Initial head schedule [time_horizon]
-            w_p (torch.Tensor): Power deviation weights [time_horizon]
-            w_h (torch.Tensor): Head deviation weights [time_horizon]
-            w_q (torch.Tensor): Flow deviation weights [time_horizon]
-            
-        Returns:
-            tuple: Optimized (p, q, h, v_low) schedules
-        """
-        # Initialize layer if needed
-        self.initialize_layer(power, head, flow)
-        
-        # Just solve with new parameter values
-        p_opt, q_opt, h_opt, v_low_opt = self.layer(
-            DA_prices, c, d, e, a, b, w_p, w_h, w_q,
-            solver_args={"solve_method": "ECOS"}
-        )
-        
-        return p_opt, q_opt, h_opt, v_low_opt
-
-class Pipeline:
+# %% 
+class HydroParameters:
     def __init__(
-            self,
-            # Time and operation parameters
-            time_horizon=24,  # number of time periods
-            UPC_sampling_rate=100,  # number of samples for UPC regression
-            δp=5,  # MW, power trust region
-            δh=20,  # m, head trust region
-            δq=7,  # m^3/s, flow trust region
-            operational_cost=3.8,  # EUR/MWh
-            rho=1000,  # kg/m^3
-            g=9.81,  # m/s^2
-            mu=0.9,  # efficiency
-            
-            # Physical constraints
-            head_min=head_min,
-            head_max=head_max,
-            max_vol_up=max_vol_up,
-            min_vol_low=min_vol_low,
-            ramp_up=ramp_up,
-            ramp_down=ramp_down,
-            
-            # Target values
-            target_head=target_head,
-            target_vol_low=target_vol_low,
-            head_init=head_init,
-            v_low_init=v_low_init,
-            
-            # UPC boundary coefficients
-            neg_min_fit=neg_min_fit,
-            neg_max_fit=neg_max_fit,
-            pos_min_fit=pos_min_fit,
-            pos_max_fit=pos_max_fit,
-            
-            # UPC boundary functions
-            neg_min=neg_min,
-            neg_max=neg_max,
-            pos_min=pos_min,
-            pos_max=pos_max,
-            
-            # Reservoir functions
-            h_to_v_low_fitted=h_to_v_low_fitted,
-            predict_q_poly=predict_q_poly,
-            gross_head=gross_head
+        self,
+        time_horizon=24, # number of time periods
+        sampling_rate=100, # number of samples for regression
+        δ_p=5,
+        δ_h=20,
+        δ_q=7,
+        operational_cost=3.8,
+        rho=1000,
+        g=9.81,
+        mu=0.9,
+        head_min=head_min,
+        head_max=head_max,
+        max_vol_up=max_vol_up,
+        min_vol_low=min_vol_low,
+        ramp_up=ramp_up,
+        ramp_down=ramp_down,
+        target_head=target_head,
+        target_vol_low=target_vol_low,
+        head_init=head_init,
+        v_low_init=v_low_init,
+        neg_min_fit=neg_min_fit, 
+        neg_max_fit=neg_max_fit,   
+        pos_min_fit=pos_min_fit,     
+        pos_max_fit=pos_max_fit,
+        neg_min=neg_min,
+        neg_max=neg_max,
+        pos_min=pos_min,
+        pos_max=pos_max,
+        predict_q_poly=predict_q_poly,
+        h_to_v_low_fitted=h_to_v_low_fitted,
+        gross_head=gross_head
     ):
-        # Store time and operation parameters
         self.time_horizon = time_horizon
-        self.UPC_sampling_rate = UPC_sampling_rate
+        self.sampling_rate = sampling_rate
+        self.δ_p = δ_p
+        self.δ_h = δ_h
+        self.δ_q = δ_q
         self.operational_cost = operational_cost
         self.rho = rho
         self.g = g
         self.mu = mu
 
-        # Store trust region parameters
-        self.δp = δp
-        self.δh = δh
-        self.δq = δq
-
-        # Store physical constraints
         self.head_min = head_min
         self.head_max = head_max
         self.max_vol_up = max_vol_up
@@ -266,186 +100,271 @@ class Pipeline:
         self.ramp_up = ramp_up
         self.ramp_down = ramp_down
 
-        # Store target values
         self.target_head = target_head
         self.target_vol_low = target_vol_low
         self.head_init = head_init
         self.v_low_init = v_low_init
 
-        # Store UPC boundary coefficients
         self.neg_min_fit = neg_min_fit
         self.neg_max_fit = neg_max_fit
         self.pos_min_fit = pos_min_fit
         self.pos_max_fit = pos_max_fit
 
-        # Store UPC boundary functions
         self.neg_min = neg_min
         self.neg_max = neg_max
         self.pos_min = pos_min
         self.pos_max = pos_max
 
-        # Store reservoir functions
-        self.h_to_v_low_fitted = h_to_v_low_fitted
         self.predict_q_poly = predict_q_poly
+        self.h_to_v_low_fitted = h_to_v_low_fitted
         self.gross_head = gross_head
 
-        # Initialize OptiLayer
-        self.opti_layer = OptiLayer(
-            time_horizon=self.time_horizon,
-            operational_cost=self.operational_cost,
-            head_min=self.head_min,
-            head_max=self.head_max,
-            v_low_init=self.v_low_init,
-            v_low_target=self.target_vol_low,
-            pos_min_fit=self.pos_min_fit,
-            pos_max_fit=self.pos_max_fit,
-            neg_min_fit=self.neg_min_fit,
-            neg_max_fit=self.neg_max_fit,
-        )
-        # Initialize weight prediction network
-        self.weight_network = nn.Sequential(
-            nn.Linear(4 * time_horizon, 10),  # Input: concatenated DA_prices, power, flow, head
-            nn.ReLU(),
-            nn.Linear(10, 10),
-            nn.ReLU(),
-            nn.Linear(10, 3 * time_horizon),  # Output: w_p, w_q, w_h for each timestep
-            nn.Softplus()  # Ensure positive weights
-        )
-
-    def predict_weights(self, DA_prices, power, flow, head):
-        """
-        Predict optimization weights using the neural network.
-        """
-        # Concatenate inputs
-        x = torch.cat([DA_prices, power, flow, head])
-        
-        # Get network output
-        output = self.weight_network(x)
-        
-        # Split output into three weight vectors
-        w_p = output[:self.time_horizon]
-        w_q = output[self.time_horizon:2*self.time_horizon]
-        w_h = output[2*self.time_horizon:]
-        
-        return w_p, w_q, w_h
+class RegressionLayer:
+    def __init__(self, params: HydroParameters):
+        self.params = params  # Store the hydro parameters
 
     def least_squares_UPC_torch(self, p_samples, h_samples, q_values):
-        '''Least squares regression for q = c*p + d*h + e'''
+        """Perform least squares for q = c*p + d*h + e."""
         X = torch.stack([p_samples, h_samples, torch.ones_like(p_samples)], dim=1)
         y = q_values.unsqueeze(1)
-        XTX = torch.matmul(X.t(), X)
+        XTX = X.t() @ X
         XTX_inv = torch.inverse(XTX)
-        XTy = torch.matmul(X.t(), y)
-        beta = torch.matmul(XTX_inv, XTy)
+        XTy = X.t() @ y
+        beta = XTX_inv @ XTy
         return beta.squeeze()
 
     def least_squares_v_low_torch(self, h_samples, v_low_samples):
-        '''Least squares regression for v_low = a*h + b'''
+        """Perform least squares for v_low = a*h + b."""
         X = torch.stack([h_samples, torch.ones_like(h_samples)], dim=1)
         y = v_low_samples.unsqueeze(1)
-        XTX = torch.matmul(X.t(), X)
+        XTX = X.t() @ X
         XTX_inv = torch.inverse(XTX)
-        XTy = torch.matmul(X.t(), y)
-        beta = torch.matmul(XTX_inv, XTy)
+        XTy = X.t() @ y
+        beta = XTX_inv @ XTy
         return beta.squeeze()
 
-    def regression_layer(self, power, head):
+    def run_regression(self, power, head):
         """
-        Args:
-            power (torch.Tensor): Power schedule [time_horizon]
-            head (torch.Tensor): Head schedule [time_horizon]
-        
-        Returns:
-            tuple: Tensors of regression coefficients (c, d, e) for UPC and (a, b) for v_low-head.
-                    q = c*p + d*h + e, v_low = a*h + b.
+        For each hour t in [0..time_horizon-1], 
+        compute local linear models for q and v_low.
+        Returns c, d, e, a, b as Tensors of size [time_horizon].
         """
-        c, d, e = {}, {}, {}  # UPC regression coefficients
-        a, b = {}, {}  # v_low regression coefficients
+        TH = self.params.time_horizon
+        c_list, d_list, e_list = [], [], []
+        a_list, b_list = [], []
 
-        for t in range(self.time_horizon):
-            # UPC regression
-            h_samples = torch.linspace(
-                max(self.head_min, head[t] - self.δh),
-                min(self.head_max, head[t] + self.δh),
-                self.UPC_sampling_rate
-            )
-            p_samples = torch.linspace(
-                power[t] - self.δp,
-                power[t] + self.δp,
-                self.UPC_sampling_rate
-            )
+        for t in range(TH):
+            # 1) Build samples for (p, h) around current operating point
+            p_center = power[t].item()
+            h_center = head[t].item()
 
-            # Create meshgrid of power and head samples
-            p_mesh, h_mesh = torch.meshgrid(p_samples, h_samples, indexing='ij')
+            p_lo = p_center - self.params.δ_p
+            p_hi = p_center + self.params.δ_p
+            p_samples = torch.linspace(p_lo, p_hi, self.params.sampling_rate)  # or self.p.UPC_sampling_rate, etc.
+
+            h_lo = max(self.params.head_min, h_center - self.params.δ_h)
+            h_hi = min(self.params.head_max, h_center + self.params.δ_h)
+            h_samples = torch.linspace(h_lo, h_hi, self.params.sampling_rate)  # or self.p.UPC_sampling_rate
+
+            # Create meshgrid
+            p_mesh, h_mesh = torch.meshgrid(p_samples, h_samples, indexing="ij")
             p_flat = p_mesh.flatten()
             h_flat = h_mesh.flatten()
 
-            # Create mask for valid points using imported fit coefficients
-            mask = ((self.neg_min_fit[0] * h_flat + self.neg_min_fit[1] <= p_flat) &
-                    (p_flat <= self.neg_max_fit[0] * h_flat + self.neg_max_fit[1])) | \
-                ((self.pos_min_fit[0] * h_flat + self.pos_min_fit[1] <= p_flat) &
-                    (p_flat <= self.pos_max_fit[0] * h_flat + self.pos_max_fit[1]))
-
-            # Get valid points
+            # 2) Filter by valid region (pump or turbine)
+            mask_turbine = (
+                (p_flat >= self.params.pos_min_fit[0]*h_flat + self.params.pos_min_fit[1]) &
+                (p_flat <= self.params.pos_max_fit[0]*h_flat + self.params.pos_max_fit[1])
+            )
+            mask_pump = (
+                (p_flat >= self.params.neg_min_fit[0]*h_flat + self.params.neg_min_fit[1]) &
+                (p_flat <= self.params.neg_max_fit[0]*h_flat + self.params.neg_max_fit[1])
+            )
+            mask = mask_turbine | mask_pump
             p_valid = p_flat[mask]
             h_valid = h_flat[mask]
 
-            if p_valid.numel() > 0:
-                # Calculate q values using imported predict_q_poly function
-                q_values = torch.tensor([
-                    self.predict_q_poly(p.item(), h.item())
-                    for p, h in zip(p_valid, h_valid)
-                ], dtype=torch.float32)
-
-                # Perform UPC regression
-                beta = self.least_squares_UPC_torch(p_valid, h_valid, q_values)
-                c[t], d[t], e[t] = beta.tolist()
+            # 3) Evaluate q = predict_q_poly(...) for valid points
+            if p_valid.numel() == 0:
+                # Fallback if no valid points
+                c_list.append(0.0)
+                d_list.append(0.0)
+                e_list.append(0.0)
             else:
-                c[t], d[t], e[t] = 0, 0, 0  # Default values if no valid points
+                q_values = torch.tensor([
+                    self.params.predict_q_poly(pv.item(), hv.item())
+                    for pv, hv in zip(p_valid, h_valid)
+                ], dtype=torch.float32)
+                beta = self.least_squares_UPC_torch(p_valid, h_valid, q_values)
+                c_list.append(beta[0].item())
+                d_list.append(beta[1].item())
+                e_list.append(beta[2].item())
 
-            # v_low regression
-            h_samples = torch.linspace(
-                max(self.head_min, head[t] - self.δh),
-                min(self.head_max, head[t] + self.δh),
-                self.UPC_sampling_rate
-            )
-
-            # Calculate v_low samples using imported h_to_v_low_fitted function
-            v_low_samples = torch.tensor([
-                self.h_to_v_low_fitted(h.item())
-                for h in h_samples
+            # 4) Regression for v_low = a*h + b
+            h_samples_2 = torch.linspace(h_lo, h_hi, self.params.sampling_rate)  # e.g. 20 points around the head
+            v_low_values = torch.tensor([
+                self.params.h_to_v_low_fitted(hh.item()) for hh in h_samples_2
             ], dtype=torch.float32)
+            beta_v = self.least_squares_v_low_torch(h_samples_2, v_low_values)
+            a_list.append(beta_v[0].item())
+            b_list.append(beta_v[1].item())
 
-            # Perform v_low regression
-            beta = self.least_squares_v_low_torch(h_samples, v_low_samples)
-            a[t], b[t] = beta.tolist()
-
-            # # {TEST(Checked)} Print regression equations for each hour
-            # print(f"\nTime {t}:")
-            # print(f"Volume model: v_low = {a[t]:.4f}*h + {b[t]:.4f}")
-            # print(f"Flow model: q = {c[t]:.4f}*p + {d[t]:.4f}*h + {e[t]:.4f}")
-
-        # Convert coefficient dictionaries to tensors
-        c_tensor = torch.tensor([c[t] for t in range(self.time_horizon)], dtype=torch.float32)
-        d_tensor = torch.tensor([d[t] for t in range(self.time_horizon)], dtype=torch.float32)
-        e_tensor = torch.tensor([e[t] for t in range(self.time_horizon)], dtype=torch.float32)
-        a_tensor = torch.tensor([a[t] for t in range(self.time_horizon)], dtype=torch.float32)
-        b_tensor = torch.tensor([b[t] for t in range(self.time_horizon)], dtype=torch.float32)
+        # Convert lists to Tensors
+        c_tensor = torch.tensor(c_list, dtype=torch.float32)
+        d_tensor = torch.tensor(d_list, dtype=torch.float32)
+        e_tensor = torch.tensor(e_list, dtype=torch.float32)
+        a_tensor = torch.tensor(a_list, dtype=torch.float32)
+        b_tensor = torch.tensor(b_list, dtype=torch.float32)
 
         return c_tensor, d_tensor, e_tensor, a_tensor, b_tensor
+
+class OptiLayer:
+    def __init__(self, params: HydroParameters):
+        """
+        A class that constructs (and caches) a CVXPY problem for optimization.
+        """
+        self.params = params
+        self.layer = None
+        self.power_init = None
+        self.head_init = None
+        self.flow_init = None
+
+    def initialize_layer(self, power, head, flow):
+        """
+        Only build the CVXPY problem if needed.
+        """
+        if (self.layer is None 
+            or not torch.allclose(self.power_init, power) 
+            or not torch.allclose(self.head_init, head)):
+            
+            self.power_init = power.detach()
+            self.head_init = head.detach()
+            self.flow_init = flow.detach()
+            self.layer = self._build_cvxpy()
+
+    def _build_cvxpy(self):
+        TH = self.params.time_horizon
+        # Define CVXPY variables
+        p_var = cp.Variable(TH)
+        q_var = cp.Variable(TH)
+        h_var = cp.Variable(TH)
+        v_low_var = cp.Variable(TH)
+
+        # Define CVXPY parameters
+        DA_price_param = cp.Parameter(TH)
+        c_param = cp.Parameter(TH)
+        d_param = cp.Parameter(TH)
+        e_param = cp.Parameter(TH)
+        a_param = cp.Parameter(TH)
+        b_param = cp.Parameter(TH)
+        w_p_param = cp.Parameter(TH, nonneg=True)
+        w_h_param = cp.Parameter(TH, nonneg=True)
+        w_q_param = cp.Parameter(TH, nonneg=True)
+
+        # Warm starts
+        p_var.value = self.power_init.tolist()
+        h_var.value = self.head_init.tolist()
+
+        # Objective
+        revenue = DA_price_param @ p_var
+        cost = self.params.operational_cost * cp.sum_squares(p_var)
+
+        power_dev_pen = cp.sum(w_p_param @ cp.square(p_var - self.power_init))
+        head_dev_pen = cp.sum(w_h_param @ cp.square(h_var - self.head_init))
+        flow_dev_pen = cp.sum(w_q_param @ cp.square(q_var - self.flow_init))
+
+        objective = cp.Maximize(
+            revenue 
+            - cost
+            - power_dev_pen
+            - head_dev_pen
+            - flow_dev_pen
+        )
+
+        # Constraints
+        constraints = []
+        for t in range(TH):
+            # Mode constraints based on sign of power_init
+            if self.power_init[t] == 0:
+                constraints += [p_var[t] == 0, q_var[t] == 0]
+            elif self.power_init[t] > 0:  # Turbine
+                constraints += [
+                    p_var[t] >= self.params.pos_min_fit[0] * h_var[t] + self.params.pos_min_fit[1],
+                    p_var[t] <= self.params.pos_max_fit[0] * h_var[t] + self.params.pos_max_fit[1],
+                    q_var[t] == c_param[t] * p_var[t] + d_param[t]*h_var[t] + e_param[t],
+                ]
+            else:  # Pump
+                constraints += [
+                    p_var[t] >= self.params.neg_min_fit[0] * h_var[t] + self.params.neg_min_fit[1],
+                    p_var[t] <= self.params.neg_max_fit[0] * h_var[t] + self.params.neg_max_fit[1],
+                    q_var[t] == c_param[t] * p_var[t] + d_param[t]*h_var[t] + e_param[t],
+                ]
+
+            # Head and volume constraints
+            constraints += [
+                h_var[t] >= self.params.head_min,
+                h_var[t] <= self.params.head_max,
+                v_low_var[t] == a_param[t] * h_var[t] + b_param[t],
+            ]
+
+            # Volume balance
+            if t == 0:
+                constraints += [v_low_var[0] == self.params.v_low_init + q_var[0] * 3600]
+            else:
+                constraints += [v_low_var[t] == v_low_var[t-1] + q_var[t] * 3600]
+
+        # Final volume constraint
+        constraints += [v_low_var[TH-1] <= self.params.target_vol_low]
+
+        problem = cp.Problem(objective, constraints)
+        assert problem.is_dpp()
+
+        layer = CvxpyLayer(
+            problem,
+            parameters=[DA_price_param, c_param, d_param, e_param, a_param, b_param, w_p_param, w_h_param, w_q_param],
+            variables=[p_var, q_var, h_var, v_low_var]
+        )
+        return layer
+
+    def forward(self, 
+                DA_prices, c, d, e, a, b, 
+                power, head, flow, 
+                w_p, w_h, w_q):
+        """
+        Solve the optimization for new parameter values.
+        """
+        self.initialize_layer(power, head, flow)
+
+        (p_opt, q_opt, h_opt, v_opt) = self.layer(
+            DA_prices, c, d, e, a, b, 
+            w_p, w_h, w_q,
+            solver_args={"solve_method": "ECOS"}
+        )
+        return p_opt, q_opt, h_opt, v_opt
+
+class SimulationLayer:
+    def __init__(self, params):
+        """
+        A class for minute-by-minute simulation of the operation, 
+        using the same parameters object as the other modules.
+        """
+        self.params = params
 
     def simulate_operation(self, p, q, h):
         """
         Simulate minute-by-minute operation with physical constraints and calibration.
         
         Args:
-            p (torch.Tensor): Hourly power schedule [24]
-            q (torch.Tensor): Hourly flow schedule [24]  
-            h (torch.Tensor): Hourly head schedule [24]
+            p (torch.Tensor): Hourly power schedule [time_horizon]
+            q (torch.Tensor): Hourly flow schedule [time_horizon]
+            h (torch.Tensor): Hourly head schedule [time_horizon]
         
         Returns:
-            tuple: Calibrated minute-wise (p, q, h, v_low) schedules [1440]
+            tuple: Calibrated minute-wise (p, q, h, v_low) schedules.
+                   Each returned tensor has length time_horizon * 60.
         """
+        import torch
+        
         # Repeat schedules to minute resolution
         p_sim = p.repeat_interleave(60) 
         q_sim = q.repeat_interleave(60)
@@ -453,144 +372,202 @@ class Pipeline:
         
         # Initialize arrays
         p_sim_clb = p_sim.clone()
-        q_sim_clb = torch.zeros(1441)
-        h_sim_clb = torch.zeros(1441) 
-        v_low_clb = torch.zeros(1441)
+        q_sim_clb = torch.zeros(len(p_sim) + 1)  # +1 to allow final appended state
+        h_sim_clb = torch.zeros(len(p_sim) + 1)
+        v_low_clb = torch.zeros(len(p_sim) + 1)
         
-        # Add end of day state
+        # Add end-of-day state for continuity
         p_sim_clb = torch.cat([p_sim_clb, p_sim_clb[-1].unsqueeze(0)])
         
-        # Add idle minutes between mode changes
-        for i in range(len(p_sim_clb)-1, 0, -1):
-            if p_sim_clb[i] * p_sim_clb[i-1] < 0:
-                p_sim_clb[i-1] = 0
+        # Add idle minutes between mode changes (sign changes)
+        for i in range(len(p_sim_clb) - 1, 0, -1):
+            if p_sim_clb[i] * p_sim_clb[i - 1] < 0:
+                p_sim_clb[i - 1] = 0
                 
         # Backward ramping adjustment
-        for hour in range(self.time_horizon-1, -1, -1):
+        for hour in range(self.params.time_horizon - 1, -1, -1):
             hour_start = hour * 60
             hour_end = hour_start + 60
             
-            # Set first minute to match hourly schedule
+            # Set the first minute to match the original hourly schedule
             p_sim_clb[hour_start] = p[hour]
             
-            # Adjust remaining minutes
-            for i in range(hour_end-1, hour_start, -1):
-                if p_sim_clb[i] - p_sim_clb[i-1] > self.ramp_down:
-                    p_sim_clb[i-1] = p_sim_clb[i] - self.ramp_down
-                elif p_sim_clb[i] - p_sim_clb[i-1] < -self.ramp_up:
-                    p_sim_clb[i-1] = p_sim_clb[i] + self.ramp_up
-                    
+            # Adjust remaining minutes within that hour window
+            for i in range(hour_end - 1, hour_start, -1):
+                if p_sim_clb[i] - p_sim_clb[i - 1] > self.params.ramp_down:
+                    p_sim_clb[i - 1] = p_sim_clb[i] - self.params.ramp_down
+                elif p_sim_clb[i] - p_sim_clb[i - 1] < -self.params.ramp_up:
+                    p_sim_clb[i - 1] = p_sim_clb[i] + self.params.ramp_up
+        
         # Initialize first state
-        v_low_clb[0] = self.v_low_init
+        v_low_clb[0] = self.params.v_low_init
         q_sim_clb[0] = q_sim[0]
         h_sim_clb[0] = h_sim[0]
         
         # Forward simulation with physical constraints
-        for i in range(len(p_sim_clb)-1):
+        for i in range(len(p_sim_clb) - 1):
             # Turbine mode
             if p_sim_clb[i] > 0:
-                if (p_sim_clb[i] > self.pos_min(h_sim_clb[i]) and 
-                    p_sim_clb[i] < self.pos_max(h_sim_clb[i])):
-                    q_sim_clb[i] = self.predict_q_poly(p_sim_clb[i], h_sim_clb[i])
-                elif p_sim_clb[i] < self.pos_min(h_sim_clb[i]):
-                    p_sim_clb[i] = self.pos_min(h_sim_clb[i])
-                    q_sim_clb[i] = self.predict_q_poly(p_sim_clb[i], h_sim_clb[i])
-                elif p_sim_clb[i] > self.pos_max(h_sim_clb[i]):
-                    p_sim_clb[i] = self.pos_max(h_sim_clb[i])
-                    q_sim_clb[i] = self.predict_q_poly(p_sim_clb[i], h_sim_clb[i])
-                    
+                if (p_sim_clb[i] > self.params.pos_min(h_sim_clb[i]) and 
+                    p_sim_clb[i] < self.params.pos_max(h_sim_clb[i])):
+                    q_sim_clb[i] = self.params.predict_q_poly(p_sim_clb[i], h_sim_clb[i])
+                elif p_sim_clb[i] < self.params.pos_min(h_sim_clb[i]):
+                    p_sim_clb[i] = self.params.pos_min(h_sim_clb[i])
+                    q_sim_clb[i] = self.params.predict_q_poly(p_sim_clb[i], h_sim_clb[i])
+                elif p_sim_clb[i] > self.params.pos_max(h_sim_clb[i]):
+                    p_sim_clb[i] = self.params.pos_max(h_sim_clb[i])
+                    q_sim_clb[i] = self.params.predict_q_poly(p_sim_clb[i], h_sim_clb[i])
+            
             # Pump mode
             elif p_sim_clb[i] < 0:
-                if (p_sim_clb[i] > self.neg_min(h_sim_clb[i]) and 
-                    p_sim_clb[i] < self.neg_max(h_sim_clb[i])):
-                    q_sim_clb[i] = self.predict_q_poly(p_sim_clb[i], h_sim_clb[i])
-                elif p_sim_clb[i] < self.neg_min(h_sim_clb[i]):
-                    p_sim_clb[i] = self.neg_min(h_sim_clb[i])
-                    q_sim_clb[i] = self.predict_q_poly(p_sim_clb[i], h_sim_clb[i])
-                elif p_sim_clb[i] > self.neg_max(h_sim_clb[i]):
-                    p_sim_clb[i] = self.neg_max(h_sim_clb[i])
-                    q_sim_clb[i] = self.predict_q_poly(p_sim_clb[i], h_sim_clb[i])
+                if (p_sim_clb[i] > self.params.neg_min(h_sim_clb[i]) and 
+                    p_sim_clb[i] < self.params.neg_max(h_sim_clb[i])):
+                    q_sim_clb[i] = self.params.predict_q_poly(p_sim_clb[i], h_sim_clb[i])
+                elif p_sim_clb[i] < self.params.neg_min(h_sim_clb[i]):
+                    p_sim_clb[i] = self.params.neg_min(h_sim_clb[i])
+                    q_sim_clb[i] = self.params.predict_q_poly(p_sim_clb[i], h_sim_clb[i])
+                elif p_sim_clb[i] > self.params.neg_max(h_sim_clb[i]):
+                    p_sim_clb[i] = self.params.neg_max(h_sim_clb[i])
+                    q_sim_clb[i] = self.params.predict_q_poly(p_sim_clb[i], h_sim_clb[i])
             else:
                 # Idle mode
                 q_sim_clb[i] = 0
                 
             # Update volumes and check bounds
             v_low_clb[i + 1] = v_low_clb[i] + q_sim_clb[i] * 60
-            if v_low_clb[i + 1] > self.max_vol_up or v_low_clb[i + 1] < self.min_vol_low:
+
+            # Print the values of v_low_clb for each time step for debugging
+            print(f"Time {i}: {v_low_clb[i + 1].item():.3f}")
+
+            if (v_low_clb[i + 1] > self.params.max_vol_up or 
+                v_low_clb[i + 1] < self.params.min_vol_low):
                 p_sim_clb[i] = 0
                 q_sim_clb[i] = 0
-                h_sim_clb[i + 1] = h_sim_clb[i] 
+                h_sim_clb[i + 1] = h_sim_clb[i]
                 v_low_clb[i + 1] = v_low_clb[i]
             else:
-                h_sim_clb[i + 1] = self.gross_head(v_low=v_low_clb[i + 1])
-                
-        # Return calibrated schedules without final state
+                h_sim_clb[i + 1] = self.params.gross_head(v_low=v_low_clb[i + 1])
+        
+        # Return calibrated schedules without the final appended state
         return p_sim_clb[:-1], q_sim_clb[:-1], h_sim_clb[:-1], v_low_clb[:-1]
 
-    def calculate_profit(self, p_sim_clb, p_opt, v_low_clb, DA_price_quarter):
+    def calc_profit(self, 
+                    p_sim_clb, p_opt, v_low_clb, 
+                    DA_price_quarter):
         """
-        Calculate the daily profit based on simulation and optimization results.
-
-        Args:
-            p_sim_clb (torch.Tensor): Simulated power schedule [1440]
-            p_opt (torch.Tensor): Optimized power schedule [1440]
-            v_low_clb (torch.Tensor): Simulated lower reservoir volume [1440]
-            DA_price_quarter (torch.Tensor): Day-ahead electricity prices [96]
-
-        Returns:
-            torch.Tensor: Total daily profit in EUR
+        Calculate the daily profit from the final simulation.
         """
-        # Expand p_opt from hourly to minute-wise by repeating each value 60 times
+
+        # Expand p_opt from hourly to minute
         p_opt_minute = p_opt.repeat_interleave(60)
 
-        # Sum every 15 minutes to aggregate the minute-wise data to quarter-hourly totals
-        e_sim_quarter = p_sim_clb.view(-1, 15).sum(dim=1) * 0.25  # Convert MW to MWh for each quarter-hour
-        e_opt_quarter = p_opt_minute.view(-1, 15).sum(dim=1) * 0.25  # Convert MW to MWh for each quarter-hour
+        # E.g. quarter-hour intervals => 15 minutes
+        e_sim_quarter = p_sim_clb.view(-1, 15).sum(dim=1) * 0.25
+        e_opt_quarter = p_opt_minute.view(-1, 15).sum(dim=1) * 0.25
 
-        # Calculate the revenue for each quarter-hour
-        revenue_per_quarter = DA_price_quarter * e_sim_quarter  # Revenue calculation in EUR
+        # Calculate revenue
+        revenue_per_quarter = DA_price_quarter * e_sim_quarter
 
         # Determine the System Imbalance (SI) price
         surplus_penalty_multiplier = -0.5
         shortage_penalty_multiplier = -2
 
-        SI_price = torch.where(e_sim_quarter < e_opt_quarter,  # Shortage in simulation
-                            shortage_penalty_multiplier * DA_price_quarter,  # Lower output penalty
-                            surplus_penalty_multiplier * DA_price_quarter)  # Higher output penalty
-
-        # Calculate the penalty for each quarter-hour
-        penalty_per_quarter = (e_sim_quarter - e_opt_quarter) * SI_price  # Penalty calculation adjusted for MWh
-
-        # Sum the penalties over all quarter-hours to get the total penalty
+        SI_price = torch.where(
+            e_sim_quarter < e_opt_quarter, # Shortage in simulation
+            shortage_penalty_multiplier * DA_price_quarter, # Lower output penalty
+            surplus_penalty_multiplier * DA_price_quarter # Higher output penalty
+        )
+        penalty_per_quarter = (e_sim_quarter - e_opt_quarter) * SI_price # Penalty calculation adjusted for MWh
         SI_penalty = penalty_per_quarter.sum()
 
-        # Calculate volume penalty
-        volume_deficit = max(0, v_low_clb[-1] - self.target_vol_low)  # Ensure no penalty if above target
-        energy_loss = self.rho * volume_deficit * self.g * self.target_head * self.mu / 3.6e9  # Convert from J to MWh
+        # Volume penalty
+        volume_deficit = max(0, v_low_clb[-1] - self.params.target_vol_low) # Ensure no penalty if above target
+        energy_loss = self.params.rho * volume_deficit * self.params.g * self.params.target_head * self.params.mu / 3.6e9 # Convert from J to MWh
         volume_penalty = energy_loss * torch.max(DA_price_quarter)
 
-        # Calculate the operating cost
-        operating_cost = self.operational_cost * torch.sum(p_sim_clb ** 2) / 60  # Operating cost in EUR
+        # Operating cost
+        operating_cost = self.params.operational_cost * torch.sum(p_sim_clb**2) / 60
 
-        # Calculate total daily profit
-        total_daily_profit = revenue_per_quarter.sum() - SI_penalty - volume_penalty - operating_cost
+        total_profit = revenue_per_quarter.sum() - SI_penalty - volume_penalty - operating_cost
+        return total_profit
 
-        return total_daily_profit
+class Pipeline:
+    def __init__(self, params: HydroParameters):
+        self.params = params
 
-    def forward(self, power, head, DA_prices, DA_price_quarter):
-        # Predict weights
-        flow = torch.tensor([self.predict_q_poly(p.item(), h.item()) 
-                           for p, h in zip(power, head)], dtype=torch.float32)
-        w_p, w_q, w_h = self.predict_weights(DA_prices, power, flow, head)
+        # Sub-modules
+        self.regression = RegressionLayer(params)
+        self.optimizer = OptiLayer(params)
+        self.simulator = SimulationLayer(params)
 
+        # Weight-prediction network
+        TH = self.params.time_horizon
+        self.weight_network = nn.Sequential(
+            nn.Linear(4 * TH, 10), # Input: concatenated DA_prices, power, flow, head
+            nn.ReLU(),
+            nn.Linear(10, 10),
+            nn.ReLU(),
+            nn.Linear(10, 3 * TH), # Output: w_p, w_q, w_h for each timestep
+            nn.Softplus() # Ensure positive weights
+        )
 
-        # Perform regression analysis
-        c, d, e, a, b = self.regression_layer(power, head)
+    def predict_weights(self, DA_prices, power, flow, head):
+        x = torch.cat([DA_prices, power, flow, head]) # Concatenate inputs
+        output = self.weight_network(x)
 
-        # Optimize schedules using OptiLayer
-        p_opt, q_opt, h_opt, v_low_opt = self.opti_layer.forward(DA_prices, c, d, e, a, b, power, head, flow, w_p, w_h, w_q)
+        # Split output into three weight vectors
+        TH = self.params.time_horizon
+        w_p = output[:TH]
+        w_q = output[TH:2*TH]
+        w_h = output[2*TH:]
+
+        return w_p, w_q, w_h
+
+    def forward(self, 
+                power_init, head_init, 
+                DA_prices, DA_price_quarter):
+        """
+        Orchestrate the steps:
+         1) Predict flow & weights
+         2) Regression to get c,d,e,a,b
+         3) Solve optimization
+         4) Simulate + profit
+        """
+
+        # 1) Predict initial flow from (p,h)
+        flow_init = torch.tensor([
+            self.params.predict_q_poly(p.item(), h.item()) 
+            for p, h in zip(power_init, head_init)
+        ], dtype=torch.float32)
+
+        # 2) Predict penalty weights
+        w_p, w_q, w_h = self.predict_weights(DA_prices, power_init, flow_init, head_init)
+
+        # Check the values of w_p, w_q, w_h
+        print("w_p: ", w_p)
+        print("w_q: ", w_q)
+        print("w_h: ", w_h)
+
+        # 3) Run regression layer
+        c, d, e, a, b = self.regression.run_regression(power_init, head_init)
         
-        '''
+        """
+        # check the values of c, d, e, a, b
+        print("c: ", c)
+        print("d: ", d)
+        print("e: ", e)
+        print("a: ", a)
+        print("b: ", b)
+        """
+
+        # 4) Solve optimization
+        p_opt, q_opt, h_opt, v_opt = self.optimizer.forward(
+            DA_prices, c, d, e, a, b,
+            power_init, head_init, flow_init,
+            w_p, w_h, w_q
+        )
+
+        """ 
         # print optimal power, flow, head, and volume
         print("Optimized Power Schedule:")
         print(p_opt.detach().numpy())
@@ -599,19 +576,25 @@ class Pipeline:
         print("\nOptimized Head Schedule:")
         print(h_opt.detach().numpy())
         print("\nOptimized Lower Reservoir Volume Schedule:")
-        print(v_low_opt.detach().numpy())
-        '''
-        # Simulate operation
-        p_sim_clb, q_sim_clb, h_sim_clb, v_low_clb = self.simulate_operation(p_opt, q_opt, h_opt)
-        
-        # Calculate profit
-        profit = self.calculate_profit(p_sim_clb, p_opt, v_low_clb, DA_price_quarter)
+        print(v_opt.detach().numpy()) 
+        """
+
+        # 5) Simulate actual operation
+        p_sim_clb, q_sim_clb, h_sim_clb, v_low_clb = self.simulator.simulate_operation(
+            p_opt, q_opt, h_opt
+        )
+
+        # 6) Calculate profit
+        profit = self.simulator.calc_profit(
+            p_sim_clb, p_opt, v_low_clb, DA_price_quarter
+        )
 
         return profit, p_opt, q_opt, p_sim_clb, q_sim_clb, h_sim_clb, v_low_clb
 
-# %%
-# test pipeline forward pass
-pipeline = Pipeline()
+# %% Test the pipeline
+params = HydroParameters()
+pipeline = Pipeline(params)
+
 profit, p_opt, q_opt, p_sim_clb, q_sim_clb, h_sim_clb, v_low_clb = pipeline.forward(power, head, DA_price_hour, DA_price_quarter)
 
 # %%
