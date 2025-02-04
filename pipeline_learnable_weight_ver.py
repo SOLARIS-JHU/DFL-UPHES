@@ -1041,8 +1041,13 @@ if __name__ == "__main__":
     # Plot results
     plot_training_results(training_results)
 
-# %% Test backpropagation of SimulationLayer
+# %% Test the pipeline forward pass
+params = HydroParameters()
+pipeline = Pipeline(params)
 
+profit, p_opt, q_opt, h_opt, p_sim_clb, q_sim_clb, h_sim_clb, v_low_clb, c, d, e, a, b, w_p, w_q, w_h = pipeline.forward(power, head, DA_price_hour, DA_price_quarter)
+
+# %% Test backpropagation of SimulationLayer
 # Wrap p_opt, q_opt, h_opt with requires_grad for gradient computation
 p_opt_test = p_opt.detach().clone().requires_grad_(True)
 q_opt_test = q_opt.detach().clone().requires_grad_(True)
@@ -1302,12 +1307,6 @@ if __name__ == "__main__":
 1. back propagation
 2. epocs on 10 days of decisions (double for loop: database of 10 days; epocs)
 '''
-
-# %% Test the pipeline forward pass
-params = HydroParameters()
-pipeline = Pipeline(params)
-
-profit, p_opt, q_opt, h_opt, p_sim_clb, q_sim_clb, h_sim_clb, v_low_clb, c, d, e, a, b, w_p, w_q, w_h = pipeline.forward(power, head, DA_price_hour, DA_price_quarter)
 
 # %% Plot and print results of forward pass
 def plot_optimization_simulation_results(p_opt, q_opt, p_sim_clb, q_sim_clb, h_sim_clb, v_low_clb, max_vol_low=max_vol_low, save_path="optimization_simulation_results.svg"):
