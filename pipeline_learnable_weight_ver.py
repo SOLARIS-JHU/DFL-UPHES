@@ -6,6 +6,8 @@ from cvxpylayers.torch import CvxpyLayer
 import dill as pickle
 import pandas as pd
 import sys
+from tqdm import tqdm, trange
+# torch.autograd.set_detect_anomaly(True)
 
 # load portfolio data
 sys.path.append('/Library')
@@ -45,6 +47,7 @@ head = torch.tensor([76.96, 79.39, 81.82, 84.25, 86.67, 89.12, 91.47, 90.13, 88.
                         80.6, 79.35, 78.09, 76.37, 74.23, 72.18, 70.49, 68.9, 67.77, 66.67], dtype=torch.float32, requires_grad=True)
 flow = torch.tensor([-10.24, -10.14, -10.12, -10.11, -10.11, -10.18, -9.79, 5.55, 5.48, 6.16, 6.06, 5.87, 5.61, 5.36, 
                         5.19, 5.21, 5.24, 7.15, 8.95, 8.53, 7.04, 6.64, 4.68, 4.61], dtype=torch.float32, requires_grad=True)
+
 head_init = 77.0 # Initial head value
 v_low_init = h_to_v_low_fitted(head_init) # Initial lower reservoir volume
 
@@ -85,30 +88,31 @@ class HydroParameters:
     ):
         self.time_horizon = time_horizon
         self.sampling_rate = sampling_rate
-        self.δ_p = δ_p
-        self.δ_h = δ_h
-        self.δ_q = δ_q
         self.operational_cost = operational_cost
-        self.rho = rho
-        self.g = g
-        self.mu = mu
+        
+        self.δ_p = torch.tensor(δ_p, dtype=torch.float32)
+        self.δ_h = torch.tensor(δ_h, dtype=torch.float32)
+        self.δ_q = torch.tensor(δ_q, dtype=torch.float32)
+        self.rho = torch.tensor(rho, dtype=torch.float32)
+        self.g = torch.tensor(g, dtype=torch.float32)
+        self.mu = torch.tensor(mu, dtype=torch.float32)
 
-        self.head_min = head_min
-        self.head_max = head_max
-        self.max_vol_up = max_vol_up
-        self.min_vol_low = min_vol_low
-        self.ramp_up = ramp_up
-        self.ramp_down = ramp_down
+        self.head_min = torch.tensor(head_min, dtype=torch.float32)
+        self.head_max = torch.tensor(head_max, dtype=torch.float32)
+        self.max_vol_up = torch.tensor(max_vol_up, dtype=torch.float32)
+        self.min_vol_low = torch.tensor(min_vol_low, dtype=torch.float32)
+        self.ramp_up = torch.tensor(ramp_up, dtype=torch.float32)
+        self.ramp_down = torch.tensor(ramp_down, dtype=torch.float32)
 
-        self.target_head = target_head
-        self.target_vol_low = target_vol_low
-        self.head_init = head_init
-        self.v_low_init = v_low_init
+        self.target_head = torch.tensor(target_head, dtype=torch.float32)
+        self.target_vol_low = torch.tensor(target_vol_low, dtype=torch.float32)
+        self.head_init = torch.tensor(head_init, dtype=torch.float32)
+        self.v_low_init = torch.tensor(v_low_init, dtype=torch.float32)
 
-        self.neg_min_fit = neg_min_fit
-        self.neg_max_fit = neg_max_fit
-        self.pos_min_fit = pos_min_fit
-        self.pos_max_fit = pos_max_fit
+        self.neg_min_fit = torch.tensor(neg_min_fit, dtype=torch.float32)
+        self.neg_max_fit = torch.tensor(neg_max_fit, dtype=torch.float32)
+        self.pos_min_fit = torch.tensor(pos_min_fit, dtype=torch.float32)
+        self.pos_max_fit = torch.tensor(pos_max_fit, dtype=torch.float32)
 
         self.neg_min = neg_min
         self.neg_max = neg_max
@@ -119,59 +123,272 @@ class HydroParameters:
         self.h_to_v_low_fitted = h_to_v_low_fitted
         self.gross_head = gross_head
 
-class RegressionLayer:
+'''
+class RegressionLayer: # with soft constraints
     def __init__(self, params: HydroParameters):
-        self.params = params  # Store the hydro parameters
+        self.params = params
 
-    def least_squares_UPC_torch(self, p_samples, h_samples, q_values):
-        """Perform least squares for q = c*p + d*h + e."""
-        X = torch.stack([p_samples, h_samples, torch.ones_like(p_samples)], dim=1)
-        y = q_values.unsqueeze(1)
-        XTX = X.t() @ X
-        XTX_inv = torch.inverse(XTX)
-        XTy = X.t() @ y
-        beta = XTX_inv @ XTy
+    def least_squares_UPC_torch(self, p_valid, h_valid, q_values):
+        """
+        Perform least squares regression with gradient tracking.
+        
+        Args:
+            p_valid: Power values (with gradients)
+            h_valid: Head values (with gradients)
+            q_values: Flow values (with gradients)
+            
+        Returns:
+            torch.Tensor: Regression coefficients [c, d, e]
+        """
+        # Create design matrix with gradient tracking
+        ones = torch.ones_like(p_valid)
+        X = torch.stack([p_valid, h_valid, ones], dim=1)
+        y = q_values.view(-1, 1)
+        
+        # Compute least squares solution with gradient tracking
+        XTX = torch.matmul(X.t(), X)
+        XTy = torch.matmul(X.t(), y)
+        
+        # Add small regularization for numerical stability
+        epsilon = 1e-6
+        reg_matrix = epsilon * torch.eye(3, device=XTX.device)
+        XTX_reg = XTX + reg_matrix
+        
+        beta = torch.matmul(torch.inverse(XTX_reg), XTy)
         return beta.squeeze()
 
     def least_squares_v_low_torch(self, h_samples, v_low_samples):
-        """Perform least squares for v_low = a*h + b."""
-        X = torch.stack([h_samples, torch.ones_like(h_samples)], dim=1)
-        y = v_low_samples.unsqueeze(1)
-        XTX = X.t() @ X
-        XTX_inv = torch.inverse(XTX)
-        XTy = X.t() @ y
-        beta = XTX_inv @ XTy
+        """
+        Perform least squares for v_low = a*h + b with gradient tracking.
+        """
+        # Create design matrix with gradient tracking
+        ones = torch.ones_like(h_samples)
+        X = torch.stack([h_samples, ones], dim=1)
+        y = v_low_samples.view(-1, 1)
+        
+        # Compute least squares solution with gradient tracking
+        XTX = torch.matmul(X.t(), X)
+        XTy = torch.matmul(X.t(), y)
+        
+        # Add small regularization for numerical stability
+        epsilon = 1e-6
+        reg_matrix = epsilon * torch.eye(2, device=XTX.device)
+        XTX_reg = XTX + reg_matrix
+        
+        beta = torch.matmul(torch.inverse(XTX_reg), XTy)
         return beta.squeeze()
 
     def run_regression(self, power, head):
         """
-        For each hour t in [0..time_horizon-1], 
-        compute local linear models for q and v_low.
-        Returns c, d, e, a, b as Tensors of size [time_horizon].
+        Run regression with gradient tracking enabled.
+        
+        Args:
+            power: Input power schedule
+            head: Input head schedule
+            
+        Returns:
+            tuple: (c, d, e, a, b) regression coefficients
         """
         TH = self.params.time_horizon
+        device = power.device
+        c_list, d_list, e_list = [], [], []
+        a_list, b_list = [], []
+
+        def soft_and(a, b):
+            return a * b
+
+        def soft_or(a, b):
+            return a + b - a * b
+
+        for t in range(TH):
+            # Create sample points that depend on input tensors
+            p_center = power[t]
+            h_center = head[t]
+            
+            # Generate power samples around center
+            delta_p = self.params.δ_p
+            num_samples = self.params.sampling_rate
+            p_steps = torch.linspace(-delta_p, delta_p, num_samples, device=device)
+            p_samples = p_center + p_steps
+            
+            # Generate head samples
+            h_lo = torch.maximum(
+                self.params.head_min * torch.ones_like(h_center),
+                h_center - self.params.δ_h
+            )
+            h_hi = torch.minimum(
+                self.params.head_max * torch.ones_like(h_center),
+                h_center + self.params.δ_h
+            )
+            h_steps = torch.linspace(0, 1, num_samples, device=device)
+            h_samples = h_lo + (h_hi - h_lo) * h_steps
+            
+            # Create meshgrid
+            p_mesh, h_mesh = torch.meshgrid(p_samples, h_samples, indexing="ij")
+            p_flat = p_mesh.flatten()
+            h_flat = h_mesh.flatten()
+            
+            # Create soft masks for valid regions
+            mask_turbine = soft_and(
+                (p_flat >= self.params.pos_min_fit[0]*h_flat + self.params.pos_min_fit[1]).float(),
+                (p_flat <= self.params.pos_max_fit[0]*h_flat + self.params.pos_max_fit[1]).float()
+            )
+            mask_pump = soft_and(
+                (p_flat >= self.params.neg_min_fit[0]*h_flat + self.params.neg_min_fit[1]).float(),
+                (p_flat <= self.params.neg_max_fit[0]*h_flat + self.params.neg_max_fit[1]).float()
+            )
+            soft_mask = soft_or(mask_turbine, mask_pump)
+
+            epsilon = 1e-6
+            if soft_mask.sum() > epsilon:  # Check if we have valid points
+                # Apply soft mask
+                p_valid = p_flat * soft_mask
+                h_valid = h_flat * soft_mask
+                
+                # Calculate q values with vectorized operations
+                q_values = predict_q_poly(p_valid, h_valid)
+                q_values = q_values * soft_mask
+                
+                # Perform UPC regression
+                beta = self.least_squares_UPC_torch(p_valid, h_valid, q_values)
+                c_list.append(beta[0])
+                d_list.append(beta[1])
+                e_list.append(beta[2])
+            else:
+                # Handle case with no valid points
+                c_list.append(torch.zeros(1, device=device, requires_grad=True))
+                d_list.append(torch.zeros(1, device=device, requires_grad=True))
+                e_list.append(torch.zeros(1, device=device, requires_grad=True))
+
+            # Regression for v_low
+            # Generate samples for v_low regression
+            h_samples_2 = h_samples
+            v_low_values = torch.tensor([
+                self.params.h_to_v_low_fitted(h.item()) 
+                for h in h_samples_2
+            ], dtype=torch.float32, device=device, requires_grad=True)
+            
+            # Perform v_low regression
+            beta_v = self.least_squares_v_low_torch(h_samples_2, v_low_values)
+            a_list.append(beta_v[0])
+            b_list.append(beta_v[1])
+
+        # Stack results with gradient tracking
+        c_tensor = torch.stack(c_list)
+        d_tensor = torch.stack(d_list)
+        e_tensor = torch.stack(e_list)
+        a_tensor = torch.stack(a_list)
+        b_tensor = torch.stack(b_list)
+
+        return c_tensor, d_tensor, e_tensor, a_tensor, b_tensor
+'''
+
+class RegressionLayer: # with hard constraints
+    def __init__(self, params: HydroParameters):
+        self.params = params
+
+    def least_squares_UPC_torch(self, p_samples, h_samples, q_values):
+        """
+        Perform least squares for q = c*p + d*h + e with gradient tracking.
+        Ensures proper shape handling for matrix operations.
+        """
+        # Ensure inputs are tensors with gradients and proper shapes
+        p_samples = p_samples.detach().clone().requires_grad_(True)
+        h_samples = h_samples.detach().clone().requires_grad_(True)
+        q_values = q_values.detach().clone().requires_grad_(True)
+        
+        # Reshape inputs to ensure proper dimensions
+        p_samples = p_samples.view(-1)  # Flatten to 1D
+        h_samples = h_samples.view(-1)  # Flatten to 1D
+        q_values = q_values.view(-1)    # Flatten to 1D
+        
+        # Create design matrix with gradient tracking
+        ones = torch.ones_like(p_samples, requires_grad=True)
+        X = torch.stack([p_samples, h_samples, ones], dim=1)  # Shape: [n_samples, 3]
+        y = q_values.view(-1, 1)  # Shape: [n_samples, 1]
+        
+        # Compute least squares solution with gradient tracking
+        XTX = torch.matmul(X.t(), X)  # Shape: [3, 3]
+        XTy = torch.matmul(X.t(), y)  # Shape: [3, 1]
+        
+        # Add small regularization for numerical stability
+        epsilon = 1e-6
+        reg_matrix = epsilon * torch.eye(3, device=XTX.device)
+        XTX_reg = XTX + reg_matrix
+        
+        beta = torch.matmul(torch.inverse(XTX_reg), XTy)
+        return beta.squeeze()
+
+    def least_squares_v_low_torch(self, h_samples, v_low_samples):
+        """
+        Perform least squares for v_low = a*h + b with gradient tracking.
+        Ensures proper shape handling for matrix operations.
+        """
+        # Ensure inputs are tensors with gradients and proper shapes
+        h_samples = h_samples.detach().clone().requires_grad_(True)
+        v_low_samples = v_low_samples.detach().clone().requires_grad_(True)
+        
+        # Reshape inputs to ensure proper dimensions
+        h_samples = h_samples.view(-1)      # Flatten to 1D
+        v_low_samples = v_low_samples.view(-1)  # Flatten to 1D
+        
+        # Create design matrix with gradient tracking
+        ones = torch.ones_like(h_samples, requires_grad=True)
+        X = torch.stack([h_samples, ones], dim=1)  # Shape: [n_samples, 2]
+        y = v_low_samples.view(-1, 1)  # Shape: [n_samples, 1]
+        
+        # Compute least squares solution with gradient tracking
+        XTX = torch.matmul(X.t(), X)  # Shape: [2, 2]
+        XTy = torch.matmul(X.t(), y)  # Shape: [2, 1]
+        
+        # Add small regularization for numerical stability
+        epsilon = 1e-6
+        reg_matrix = epsilon * torch.eye(2, device=XTX.device)
+        XTX_reg = XTX + reg_matrix
+        
+        beta = torch.matmul(torch.inverse(XTX_reg), XTy)
+        return beta.squeeze()
+
+    def run_regression(self, power, head):
+        """
+        Run regression with gradient tracking enabled.
+        Handles batch operations properly.
+        """
+        TH = self.params.time_horizon
+        device = power.device
         c_list, d_list, e_list = [], [], []
         a_list, b_list = [], []
 
         for t in range(TH):
-            # 1) Build samples for (p, h) around current operating point
-            p_center = power[t].item()
-            h_center = head[t].item()
-
-            p_lo = p_center - self.params.δ_p
-            p_hi = p_center + self.params.δ_p
-            p_samples = torch.linspace(p_lo, p_hi, self.params.sampling_rate)  # or self.p.UPC_sampling_rate, etc.
-
-            h_lo = max(self.params.head_min, h_center - self.params.δ_h)
-            h_hi = min(self.params.head_max, h_center + self.params.δ_h)
-            h_samples = torch.linspace(h_lo, h_hi, self.params.sampling_rate)  # or self.p.UPC_sampling_rate
-
+            # Sample points around current operating point
+            p_center = power[t].detach()
+            h_center = head[t].detach()
+            
+            # Create sample points with gradient tracking
+            p_samples = torch.linspace(
+                float(p_center - self.params.δ_p),
+                float(p_center + self.params.δ_p),
+                self.params.sampling_rate,
+                device=device,
+                requires_grad=True
+            )
+            
+            h_lo = torch.max(self.params.head_min, h_center - self.params.δ_h)
+            h_hi = torch.min(self.params.head_max, h_center + self.params.δ_h)
+            h_samples = torch.linspace(
+                float(h_lo), 
+                float(h_hi), 
+                self.params.sampling_rate,
+                device=device,
+                requires_grad=True
+            )
+            
             # Create meshgrid
             p_mesh, h_mesh = torch.meshgrid(p_samples, h_samples, indexing="ij")
             p_flat = p_mesh.flatten()
             h_flat = h_mesh.flatten()
 
-            # 2) Filter by valid region (pump or turbine)
+            # Filter valid regions
             mask_turbine = (
                 (p_flat >= self.params.pos_min_fit[0]*h_flat + self.params.pos_min_fit[1]) &
                 (p_flat <= self.params.pos_max_fit[0]*h_flat + self.params.pos_max_fit[1])
@@ -181,43 +398,54 @@ class RegressionLayer:
                 (p_flat <= self.params.neg_max_fit[0]*h_flat + self.params.neg_max_fit[1])
             )
             mask = mask_turbine | mask_pump
-            p_valid = p_flat[mask]
-            h_valid = h_flat[mask]
-
-            # 3) Evaluate q = predict_q_poly(...) for valid points
-            if p_valid.numel() == 0:
-                # Fallback if no valid points
-                c_list.append(0.0)
-                d_list.append(0.0)
-                e_list.append(0.0)
+            
+            if not mask.any():
+                # Handle case with no valid points
+                c_list.append(torch.zeros(1, device=device, requires_grad=True))
+                d_list.append(torch.zeros(1, device=device, requires_grad=True))
+                e_list.append(torch.zeros(1, device=device, requires_grad=True))
             else:
-                q_values = torch.tensor([
-                    self.params.predict_q_poly(pv.item(), hv.item())
-                    for pv, hv in zip(p_valid, h_valid)
-                ], dtype=torch.float32)
+                p_valid = p_flat[mask]
+                h_valid = h_flat[mask]
+                
+                # Calculate q values
+                q_values = torch.zeros_like(p_valid)
+                for i, (p_val, h_val) in enumerate(zip(p_valid, h_valid)):
+                    q_values[i] = predict_q_poly(p_val.unsqueeze(0), h_val.unsqueeze(0))
+                
                 beta = self.least_squares_UPC_torch(p_valid, h_valid, q_values)
-                c_list.append(beta[0].item())
-                d_list.append(beta[1].item())
-                e_list.append(beta[2].item())
+                c_list.append(beta[0])
+                d_list.append(beta[1])
+                e_list.append(beta[2])
 
-            # 4) Regression for v_low = a*h + b
-            h_samples_2 = torch.linspace(h_lo, h_hi, self.params.sampling_rate)  # e.g. 20 points around the head
+            # Regression for v_low
+            h_samples_2 = torch.linspace(
+                float(h_lo), 
+                float(h_hi), 
+                self.params.sampling_rate,
+                device=device,
+                requires_grad=True
+            )
+            
+            # Calculate v_low values
             v_low_values = torch.tensor([
-                self.params.h_to_v_low_fitted(hh.item()) for hh in h_samples_2
-            ], dtype=torch.float32)
+                self.params.h_to_v_low_fitted(h.item()) 
+                for h in h_samples_2
+            ], dtype=torch.float32, device=device, requires_grad=True)
+            
             beta_v = self.least_squares_v_low_torch(h_samples_2, v_low_values)
-            a_list.append(beta_v[0].item())
-            b_list.append(beta_v[1].item())
+            a_list.append(beta_v[0])
+            b_list.append(beta_v[1])
 
-        # Convert lists to Tensors
-        c_tensor = torch.tensor(c_list, dtype=torch.float32)
-        d_tensor = torch.tensor(d_list, dtype=torch.float32)
-        e_tensor = torch.tensor(e_list, dtype=torch.float32)
-        a_tensor = torch.tensor(a_list, dtype=torch.float32)
-        b_tensor = torch.tensor(b_list, dtype=torch.float32)
+        # Stack results with gradient tracking
+        c_tensor = torch.stack(c_list)
+        d_tensor = torch.stack(d_list)
+        e_tensor = torch.stack(e_list)
+        a_tensor = torch.stack(a_list)
+        b_tensor = torch.stack(b_list)
 
         return c_tensor, d_tensor, e_tensor, a_tensor, b_tensor
-
+    
 class OptiLayer:
     def __init__(self, params: HydroParameters):
         """
@@ -361,95 +589,181 @@ class SimulationLayer:
         
         Returns:
             tuple: Calibrated minute-wise (p, q, h, v_low) schedules.
-                   Each returned tensor has length time_horizon * 60.
+                Each returned tensor has length time_horizon * 60.
         """
-        import torch
+
+        # 1) Expand to minute-level
+        p_60 = p.repeat_interleave(60)  # shape: [time_horizon*60]
+        q_60 = q.repeat_interleave(60)
+        h_60 = h.repeat_interleave(60)
+
+        # 2) Insert an extra element for “end-of-day”
+        p_sim = torch.cat([p_60, p_60[-1].unsqueeze(0)])  # shape: [T*60 + 1]
         
-        # Repeat schedules to minute resolution
-        p_sim = p.repeat_interleave(60) 
-        q_sim = q.repeat_interleave(60)
-        h_sim = h.repeat_interleave(60)
-        
-        # Initialize arrays
-        p_sim_clb = p_sim.clone()
-        q_sim_clb = torch.zeros(len(p_sim) + 1)  # +1 to allow final appended state
-        h_sim_clb = torch.zeros(len(p_sim) + 1)
-        v_low_clb = torch.zeros(len(p_sim) + 1)
-        
-        # Add end-of-day state for continuity
-        p_sim_clb = torch.cat([p_sim_clb, p_sim_clb[-1].unsqueeze(0)])
-        
-        # Add idle minutes between mode changes (sign changes)
-        for i in range(len(p_sim_clb) - 1, 0, -1):
-            if p_sim_clb[i] * p_sim_clb[i - 1] < 0:
-                p_sim_clb[i - 1] = 0
-                
-        # Backward ramping adjustment
-        for hour in range(self.params.time_horizon - 1, -1, -1):
+        # 3) Add idle minutes between mode changes
+        prod_next = p_sim[:-1] * p_sim[1:]  # p_sim[0:-1]*p_sim[1:] to see if it's < 0
+        idle_mask = (prod_next < 0)
+        # If sign changes, set that minute's power to 0
+        p_no_mode_flip = torch.where(
+            idle_mask,
+            torch.zeros_like(p_sim[:-1]),
+            p_sim[:-1]
+        )
+        # Re-append the last element
+        p_no_mode_flip = torch.cat([p_no_mode_flip, p_no_mode_flip[-1].unsqueeze(0)])
+
+        # 4) Backward ramping adjustment
+        p_ramped = p_no_mode_flip.clone()  # new reference so we don't do in-place
+
+        def backward_ramp_1hr(segment, p_hour_val, ramp_up, ramp_down):
+            """
+            segment: shape [60], representing the current hour’s minute-resolution power.
+            p_hour_val: the original hourly power we want at minute 0 of this hour-block
+            ramp_up, ramp_down: ramping constraints
+            Returns a ramped segment of shape [60].
+            """
+            seg_out = segment.clone()
+            # Force the first minute to match the original hourly power
+            seg_out[0] = p_hour_val
+
+            # Walk backward over the range [59..1], adjusting each prior minute
+            for i in reversed(range(1, 60)):
+                diff = seg_out[i] - seg_out[i-1]
+                # If diff > ramp_down, seg_out[i-1] = seg_out[i] - ramp_down
+                # else if diff < -ramp_up, seg_out[i-1] = seg_out[i] + ramp_up
+                # else leave seg_out[i-1] alone
+                seg_out[i-1] = torch.where(
+                    diff > ramp_down,
+                    seg_out[i] - ramp_down,
+                    torch.where(
+                        diff < -ramp_up,
+                        seg_out[i] + ramp_up,
+                        seg_out[i-1]
+                    )
+                )
+            return seg_out
+
+        # total minutes = self.params.time_horizon * 60
+        for hour in reversed(range(self.params.time_horizon)):
             hour_start = hour * 60
             hour_end = hour_start + 60
-            
-            # Set the first minute to match the original hourly schedule
-            p_sim_clb[hour_start] = p[hour]
-            
-            # Adjust remaining minutes within that hour window
-            for i in range(hour_end - 1, hour_start, -1):
-                if p_sim_clb[i] - p_sim_clb[i - 1] > self.params.ramp_down:
-                    p_sim_clb[i - 1] = p_sim_clb[i] - self.params.ramp_down
-                elif p_sim_clb[i] - p_sim_clb[i - 1] < -self.params.ramp_up:
-                    p_sim_clb[i - 1] = p_sim_clb[i] + self.params.ramp_up
+            # isolate that hour’s 60-min slice
+            hr_segment = p_ramped[hour_start:hour_end]
+            # ramp-correct it
+            new_segment = backward_ramp_1hr(
+                hr_segment,
+                p[hour],  # the original hourly power for that block
+                self.params.ramp_up,
+                self.params.ramp_down
+            )
+            # reassemble
+            p_ramped = torch.cat([
+                p_ramped[:hour_start],
+                new_segment,
+                p_ramped[hour_end:]
+            ])
         
-        # Initialize first state
-        v_low_clb[0] = self.params.v_low_init
-        q_sim_clb[0] = q_sim[0]
-        h_sim_clb[0] = h_sim[0]
-        
-        # Forward simulation with physical constraints
-        for i in range(len(p_sim_clb) - 1):
-            # Turbine mode
-            if p_sim_clb[i] > 0:
-                if (p_sim_clb[i] > self.params.pos_min(h_sim_clb[i]) and 
-                    p_sim_clb[i] < self.params.pos_max(h_sim_clb[i])):
-                    q_sim_clb[i] = self.params.predict_q_poly(p_sim_clb[i], h_sim_clb[i])
-                elif p_sim_clb[i] < self.params.pos_min(h_sim_clb[i]):
-                    p_sim_clb[i] = self.params.pos_min(h_sim_clb[i])
-                    q_sim_clb[i] = self.params.predict_q_poly(p_sim_clb[i], h_sim_clb[i])
-                elif p_sim_clb[i] > self.params.pos_max(h_sim_clb[i]):
-                    p_sim_clb[i] = self.params.pos_max(h_sim_clb[i])
-                    q_sim_clb[i] = self.params.predict_q_poly(p_sim_clb[i], h_sim_clb[i])
-            
-            # Pump mode
-            elif p_sim_clb[i] < 0:
-                if (p_sim_clb[i] > self.params.neg_min(h_sim_clb[i]) and 
-                    p_sim_clb[i] < self.params.neg_max(h_sim_clb[i])):
-                    q_sim_clb[i] = self.params.predict_q_poly(p_sim_clb[i], h_sim_clb[i])
-                elif p_sim_clb[i] < self.params.neg_min(h_sim_clb[i]):
-                    p_sim_clb[i] = self.params.neg_min(h_sim_clb[i])
-                    q_sim_clb[i] = self.params.predict_q_poly(p_sim_clb[i], h_sim_clb[i])
-                elif p_sim_clb[i] > self.params.neg_max(h_sim_clb[i]):
-                    p_sim_clb[i] = self.params.neg_max(h_sim_clb[i])
-                    q_sim_clb[i] = self.params.predict_q_poly(p_sim_clb[i], h_sim_clb[i])
-            else:
-                # Idle mode
-                q_sim_clb[i] = 0
-                
-            # Update volumes and check bounds
-            v_low_clb[i + 1] = v_low_clb[i] + q_sim_clb[i] * 60
+        # 5) Forward simulation:
 
-            # Print the values of v_low_clb for each time step for debugging
-            print(f"Time {i}: {v_low_clb[i + 1].item():.3f}")
+        # Initialize lists for each state
+        p_list = []
+        q_list = []
+        h_list = []
+        v_list = []
 
-            if (v_low_clb[i + 1] > self.params.max_vol_up or 
-                v_low_clb[i + 1] < self.params.min_vol_low):
-                p_sim_clb[i] = 0
-                q_sim_clb[i] = 0
-                h_sim_clb[i + 1] = h_sim_clb[i]
-                v_low_clb[i + 1] = v_low_clb[i]
-            else:
-                h_sim_clb[i + 1] = self.params.gross_head(v_low=v_low_clb[i + 1])
-        
-        # Return calibrated schedules without the final appended state
-        return p_sim_clb[:-1], q_sim_clb[:-1], h_sim_clb[:-1], v_low_clb[:-1]
+        # Start states
+        T_minutes = len(p_ramped) - 1  # total steps minus the appended “last state”
+        v_init = self.params.v_low_init  # user-chosen initial reservoir volume
+        p_list.append(p_ramped[0])      # power at minute 0
+        q_list.append(q_60[0])          # flow at minute 0 (initial guess)
+        h_list.append(h_60[0])          # head at minute 0
+        v_list.append(v_init)
+
+        for i in range(T_minutes):
+            # Current states from the last appended item
+            p_prev = p_list[-1]
+            q_prev = q_list[-1]
+            h_prev = h_list[-1]
+            v_prev = v_list[-1]
+
+            # Proposed new power from the ramped schedule:
+            p_new = p_ramped[i]
+            # We'll figure out q_new based on p_new, mode constraints, etc.
+            
+            # a) Base: idle => q=0
+            q_candidate = torch.zeros_like(p_new)
+
+            # b) For turbine mode (p_new>0), clamp p between pos_min(h) and pos_max(h)
+            #    then get q via polynomial
+            p_min_turb = self.params.pos_min(h_prev)
+            p_max_turb = self.params.pos_max(h_prev)
+            p_new_turb = torch.clamp(p_new, min=p_min_turb, max=p_max_turb)
+            q_turb = predict_q_poly(p_new_turb.unsqueeze(0), h_prev.unsqueeze(0)).squeeze(0)
+
+            # c) For pump mode (p_new<0), clamp p between neg_min(h) and neg_max(h)
+            p_min_pump = self.params.neg_min(h_prev)
+            p_max_pump = self.params.neg_max(h_prev)
+            p_new_pump = torch.clamp(p_new, min=p_min_pump, max=p_max_pump)
+            q_pump = predict_q_poly(p_new_pump.unsqueeze(0), h_prev.unsqueeze(0)).squeeze(0)
+
+            # Combine these with torch.where logic:
+            # If p_new>0 => turbine scenario, if p_new<0 => pump scenario, else idle
+            is_turbine = (p_new > 0)
+            is_pump    = (p_new < 0)
+            # (If exactly zero, stay idle.)
+
+            # Final p_new after clamping:
+            p_final = torch.where(
+            is_turbine,
+            p_new_turb,  # clamp to pos_min/max
+            torch.where(
+                is_pump,
+                p_new_pump,  # clamp to neg_min/max
+                torch.zeros_like(p_new)  # idle
+            )
+            )
+            # Final q_new:
+            q_final = torch.where(
+            is_turbine,
+            q_turb,
+            torch.where(
+                is_pump,
+                q_pump,
+                torch.zeros_like(q_turb)  # idle
+            )
+            )
+
+            # d) Update volume
+            #    v_next = v_prev + q_final * 60
+            v_candidate = v_prev + q_final * 60
+
+            # e) If v_candidate out of bounds => revert to idle (p=0, q=0, no volume change, no head change)
+            out_of_bounds = (v_candidate > self.params.max_vol_up) | (v_candidate < self.params.min_vol_low)
+
+            p_next = torch.where(out_of_bounds, torch.zeros_like(p_final), p_final)
+            q_next = torch.where(out_of_bounds, torch.zeros_like(q_final), q_final)
+            v_next = torch.where(out_of_bounds, v_prev, v_candidate)
+
+            # f) Update head from final volume
+            #    If out_of_bounds => h_next = h_prev else h_next = self.params.gross_head(...)
+            h_candidate = self.params.gross_head(v_low=v_next)
+            h_next = torch.where(out_of_bounds, h_prev, h_candidate)
+
+            # Append these new states
+            p_list.append(p_next)
+            q_list.append(q_next)
+            v_list.append(v_next.item())  # Convert to Python float for appending
+            h_list.append(h_next)
+
+            # # Debug print 
+            # print(f"Minute {i}: v_low={v_next.item():.3f}")
+
+        p_sim_clb = torch.stack(p_list[:-1])  # length T_minutes
+        q_sim_clb = torch.stack(q_list[:-1])
+        h_sim_clb = torch.stack(h_list[:-1])
+        v_low_clb = torch.tensor(v_list[:-1], dtype=torch.float32)  # Convert to Tensor
+
+        return p_sim_clb, q_sim_clb, h_sim_clb, v_low_clb
 
     def calc_profit(self, 
                     p_sim_clb, p_opt, v_low_clb, 
@@ -535,18 +849,17 @@ class Pipeline:
         """
 
         # 1) Predict initial flow from (p,h)
-        flow_init = torch.tensor([
-            self.params.predict_q_poly(p.item(), h.item()) 
-            for p, h in zip(power_init, head_init)
-        ], dtype=torch.float32)
+        flow_init = predict_q_poly(power_init, head_init)
 
         # 2) Predict penalty weights
         w_p, w_q, w_h = self.predict_weights(DA_prices, power_init, flow_init, head_init)
 
+        '''
         # Check the values of w_p, w_q, w_h
         print("w_p: ", w_p)
         print("w_q: ", w_q)
         print("w_h: ", w_h)
+        '''
 
         # 3) Run regression layer
         c, d, e, a, b = self.regression.run_regression(power_init, head_init)
@@ -589,20 +902,414 @@ class Pipeline:
             p_sim_clb, p_opt, v_low_clb, DA_price_quarter
         )
 
-        return profit, p_opt, q_opt, p_sim_clb, q_sim_clb, h_sim_clb, v_low_clb
+        return profit, p_opt, q_opt, h_opt, p_sim_clb, q_sim_clb, h_sim_clb, v_low_clb, c, d, e, a, b, w_p, w_q, w_h
 
-# %% Test the pipeline
+
+# %% Training 
+import torch.optim as optim  
+from datetime import datetime, timedelta
+import random
+
+def generate_random_dates_2022():
+    """
+    Generate 10 random dates from 2022 in "YYYY-MM-DD" format
+    """
+    start_date = datetime(2022, 1, 1)
+    end_date = datetime(2022, 12, 31)
+    
+    date_range = (end_date - start_date).days + 1
+    random_days = random.sample(range(date_range), 10)
+    
+    random_dates = [
+        (start_date + timedelta(days=day)).strftime("%Y-%m-%d") 
+        for day in random_days
+    ]
+    return random_dates
+
+
+def train_weights(pipeline, num_epochs=100, learning_rate=0.001):
+    """
+    Train the weight prediction network using 10 random days from 2022
+    """
+    # Set random seed for reproducibility
+    torch.manual_seed(42)
+    random.seed(42)
+    
+    # Initialize optimizer for the weight network
+    optimizer = optim.Adam(pipeline.weight_network.parameters(), lr=learning_rate)  # Using torch.optim
+    
+    # Generate 10 random dates from 2022
+    training_dates = generate_random_dates_2022()
+    
+    # Lists to track metrics
+    epoch_losses = []
+    daily_profits = {date: [] for date in training_dates}
+    
+    # Create progress bar for epochs
+    epoch_pbar = trange(num_epochs, desc='Training Progress')
+    
+    # Training loop
+    for epoch in epoch_pbar:
+        epoch_loss = 0
+        
+        # Iterate over each day with progress bar
+        day_pbar = tqdm(training_dates, desc=f'Epoch {epoch+1}', leave=False)
+        for date in day_pbar:
+            # Read day-ahead prices for this date
+            DA_price_hour = read_da_price(date)
+            DA_price_quarter = hourly_to_quarterly(DA_price_hour)
+            
+            optimizer.zero_grad() # Zero the gradients
+            
+            # Forward pass through pipeline
+            profit, p_opt, q_opt, h_opt, p_sim_clb, q_sim_clb, h_sim_clb, v_low_clb, c, d, e, a, b, w_p, w_q, w_h = pipeline.forward(
+                power, head, DA_price_hour, DA_price_quarter
+            )
+            
+            loss = -profit # Loss is negative profit (since we want to maximize profit)
+            loss.backward() # Backward pass
+            optimizer.step() # Update weights
+            
+            # Track metrics
+            current_loss = loss.item()
+            epoch_loss += current_loss
+            daily_profits[date].append(profit.item())
+            
+            # Update day progress bar
+            day_pbar.set_postfix({'Loss': f'{current_loss:.2f}'})
+        
+        # Average loss for this epoch
+        avg_epoch_loss = epoch_loss / len(training_dates)
+        epoch_losses.append(avg_epoch_loss)
+        
+        # Update epoch progress bar
+        epoch_pbar.set_postfix({'Avg Loss': f'{avg_epoch_loss:.2f}'})
+        
+        # Sample weights display every 10 epochs
+        if (epoch + 1) % 10 == 0:
+            with torch.no_grad():
+                sample_weights = pipeline.predict_weights(
+                    DA_price_hour, power, flow, head
+                )
+                tqdm.write(f"\nEpoch {epoch+1} sample weights at t=0:"
+                          f" w_p={sample_weights[0][0]:.4f},"
+                          f" w_q={sample_weights[1][0]:.4f},"
+                          f" w_h={sample_weights[2][0]:.4f}")
+    
+    return {
+        'epoch_losses': epoch_losses,
+        'daily_profits': daily_profits,
+        'training_dates': training_dates
+    }
+
+def plot_training_results(training_results):
+    """
+    Plot training metrics
+    """
+    import matplotlib.pyplot as plt
+    
+    # Plot 1: Loss curve
+    plt.figure(figsize=(10, 5))
+    plt.plot(training_results['epoch_losses'])
+    plt.title('Training Loss over Epochs')
+    plt.xlabel('Epoch')
+    plt.ylabel('Average Loss')
+    plt.grid(True)
+    plt.show()
+    
+    # Plot 2: Daily profits
+    plt.figure(figsize=(12, 6))
+    for date in training_results['training_dates']:
+        plt.plot(training_results['daily_profits'][date], label=date)
+    plt.title('Daily Profits over Epochs')
+    plt.xlabel('Epoch')
+    plt.ylabel('Profit')
+    plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
+
+# Example usage:
+if __name__ == "__main__":
+    # Initialize parameters and pipeline
+    params = HydroParameters()
+    pipeline = Pipeline(params)
+    
+    # Train the weights
+    training_results = train_weights(pipeline, num_epochs=100)
+    
+    # Plot results
+    plot_training_results(training_results)
+
+# %% Test backpropagation of SimulationLayer
+
+# Wrap p_opt, q_opt, h_opt with requires_grad for gradient computation
+p_opt_test = p_opt.detach().clone().requires_grad_(True)
+q_opt_test = q_opt.detach().clone().requires_grad_(True)
+h_opt_test = h_opt.detach().clone().requires_grad_(True)
+
+# Create SimulationLayer instance for forward simulation
+sim_layer = SimulationLayer(params)
+
+# Run forward simulation
+p_sim_clb_test, q_sim_clb_test, h_sim_clb_test, v_low_clb_test = sim_layer.simulate_operation(
+    p_opt_test, q_opt_test, h_opt_test
+)
+
+# Compute profit scalar for differentiation
+test_profit = -sim_layer.calc_profit(
+    p_sim_clb_test, p_opt_test, v_low_clb_test, DA_price_quarter
+)
+
+# Run backpropagation
+print(">>> Attempting backprop on test_profit:")
+test_profit.backward()
+
+# Display gradients
+print("Gradient wrt p_opt_test:\n", p_opt_test.grad)
+print("Gradient wrt q_opt_test:\n", q_opt_test.grad)
+print("Gradient wrt h_opt_test:\n", h_opt_test.grad)
+
+# %% Test backpropagation of OptiLayer
 params = HydroParameters()
-pipeline = Pipeline(params)
+opti_layer = OptiLayer(params)
 
-profit, p_opt, q_opt, p_sim_clb, q_sim_clb, h_sim_clb, v_low_clb = pipeline.forward(power, head, DA_price_hour, DA_price_quarter)
+# Create test tensors with gradients
+c_test = c.detach().clone().requires_grad_(False)
+d_test = d.detach().clone().requires_grad_(False)
+e_test = e.detach().clone().requires_grad_(False)
+a_test = a.detach().clone().requires_grad_(False)
+b_test = b.detach().clone().requires_grad_(False)
+w_p_test = w_p.detach().clone().requires_grad_(True)
+w_h_test = w_h.detach().clone().requires_grad_(True)
+w_q_test = w_q.detach().clone().requires_grad_(True)
+
+# Run optimization
+p_opt_test, q_opt_test, h_opt_test, v_opt_test = opti_layer.forward(
+    DA_price_hour, c_test, d_test, e_test, a_test, b_test,
+    power, head, flow,
+    w_p_test, w_h_test, w_q_test
+)
+
+# Calculate test loss and backpropagate
+test_loss = -torch.mean(p_opt_test)
+print(">>> Attempting backprop on test_loss:")
+test_loss.backward()
+
+# Display gradients
+print("\nGradients for regression coefficients:")
+print("c gradient:", c_test.grad)
+print("d gradient:", d_test.grad)
+print("e gradient:", e_test.grad)
+print("a gradient:", a_test.grad)
+print("b gradient:", b_test.grad)
+
+print("\nGradients for weights:")
+print("w_p gradient:", w_p_test.grad)
+print("w_h gradient:", w_h_test.grad)
+print("w_q gradient:", w_q_test.grad)
+
+# %% Test backpropagation of RegressionLayer
+# Initialize parameters and create regression layer
+params = HydroParameters()
+regression_layer = RegressionLayer(params)
+
+# Create test inputs with gradients enabled
+power_test = power.detach().clone().requires_grad_(True)
+head_test = head.detach().clone().requires_grad_(True)
+
+# Run regression
+c_test, d_test, e_test, a_test, b_test = regression_layer.run_regression(power_test, head_test)
+
+# Create loss function
+loss = c_test.sum() + d_test.sum() + e_test.sum() + a_test.sum() + b_test.sum()
+print("Attempting backprop on regression loss")
+loss.backward()
+
+# Check gradients
+print("Grad wrt power_test:", power_test.grad)
+print("Grad wrt head_test:", head_test.grad)
+
+# %% debugging regression layer
+def debug_regression_layer_fixed(params, power, head):
+    """
+    Fixed version of regression layer that maintains gradient flow
+    """
+    TH = params.time_horizon
+    device = power.device
+    
+    print("Initial tensors require grad:")
+    print(f"power.requires_grad: {power.requires_grad}")
+    print(f"head.requires_grad: {head.requires_grad}")
+    
+    for t in range(1):  # Test with just first timestep for debugging
+        # Instead of detaching, use the original tensor values
+        p_center = power[t]
+        h_center = head[t]
+        
+        # Create sample points that depend on the input tensors
+        delta_p = params.δ_p
+        num_samples = params.sampling_rate
+        p_steps = torch.linspace(-delta_p, delta_p, num_samples, device=device)
+        p_samples = p_center + p_steps  # This maintains gradient connection
+        
+        # Similar for head samples
+        h_lo = torch.maximum(params.head_min * torch.ones_like(h_center), 
+                           h_center - params.δ_h)
+        h_hi = torch.minimum(params.head_max * torch.ones_like(h_center), 
+                           h_center + params.δ_h)
+        h_steps = torch.linspace(0, 1, num_samples, device=device)
+        h_samples = h_lo + (h_hi - h_lo) * h_steps  # This maintains gradient connection
+        
+        print("\nAfter creating sample points:")
+        print(f"p_samples.requires_grad: {p_samples.requires_grad}")
+        print(f"h_samples.requires_grad: {h_samples.requires_grad}")
+        
+        # Create meshgrid
+        p_mesh, h_mesh = torch.meshgrid(p_samples, h_samples, indexing="ij")
+        p_flat = p_mesh.flatten()
+        h_flat = h_mesh.flatten()
+        
+        print("\nAfter meshgrid:")
+        print(f"p_flat.requires_grad: {p_flat.requires_grad}")
+        print(f"h_flat.requires_grad: {h_flat.requires_grad}")
+        
+        # Filter valid regions using a soft mask approach
+        def soft_and(a, b):
+            return a * b
+        
+        def soft_or(a, b):
+            return a + b - a * b
+        
+        # Convert boolean conditions to soft constraints
+        mask_turbine = soft_and(
+            (p_flat >= params.pos_min_fit[0]*h_flat + params.pos_min_fit[1]).float(),
+            (p_flat <= params.pos_max_fit[0]*h_flat + params.pos_max_fit[1]).float()
+        )
+        mask_pump = soft_and(
+            (p_flat >= params.neg_min_fit[0]*h_flat + params.neg_min_fit[1]).float(),
+            (p_flat <= params.neg_max_fit[0]*h_flat + params.neg_max_fit[1]).float()
+        )
+        soft_mask = soft_or(mask_turbine, mask_pump)
+        
+        # Apply soft mask
+        p_valid = p_flat * soft_mask
+        h_valid = h_flat * soft_mask
+        
+        print("\nAfter masking:")
+        print(f"p_valid.requires_grad: {p_valid.requires_grad}")
+        print(f"h_valid.requires_grad: {h_valid.requires_grad}")
+        
+        # Calculate q values with vectorized operations
+        q_values = torch.zeros_like(p_valid)
+        q_values = predict_q_poly(p_valid, h_valid)
+        q_values = q_values * soft_mask  # Apply mask to q values
+        
+        print("\nAfter q_values calculation:")
+        print(f"q_values.requires_grad: {q_values.requires_grad}")
+        
+        # Compute regression with gradient tracking
+        ones = torch.ones_like(p_valid)
+        X = torch.stack([p_valid, h_valid, ones], dim=1)
+        y = q_values.view(-1, 1)
+        
+        print("\nBefore least squares:")
+        print(f"X.requires_grad: {X.requires_grad}")
+        print(f"y.requires_grad: {y.requires_grad}")
+        
+        # Add small regularization for numerical stability
+        XTX = torch.matmul(X.t(), X)
+        XTy = torch.matmul(X.t(), y)
+        epsilon = 1e-6
+        reg_matrix = epsilon * torch.eye(3, device=XTX.device)
+        XTX_reg = XTX + reg_matrix
+        
+        beta = torch.matmul(torch.inverse(XTX_reg), XTy)
+        print("\nAfter least squares:")
+        print(f"beta.requires_grad: {beta.requires_grad}")
+        
+        return beta
+
+# Test the fixed version
+def test_regression_debug_fixed():
+    params = HydroParameters()
+    power_test = torch.tensor([-6.77], requires_grad=True)
+    head_test = torch.tensor([76.96], requires_grad=True)
+    
+    beta = debug_regression_layer_fixed(params, power_test, head_test)
+    
+    if beta is not None:
+        loss = beta.sum()
+        print("\nAttempting backpropagation...")
+        loss.backward()
+        
+        print("\nFinal gradients:")
+        print(f"power_test.grad: {power_test.grad}")
+        print(f"head_test.grad: {head_test.grad}")
+
+test_regression_debug_fixed()
+
+# %% Test backpropagation of the whole pipeline
+def test_pipeline_backprop():
+    # Initialize parameters and pipeline
+    params = HydroParameters()
+    pipeline = Pipeline(params)
+    
+    # Create optimizer for the weight network
+    optimizer = torch.optim.Adam(pipeline.weight_network.parameters(), lr=0.001)
+    
+    # Test data (using existing variables from earlier in the code)
+    test_power = power.detach().clone()
+    test_head = head.detach().clone()
+    
+    print("Starting pipeline backpropagation test...")
+    
+    # Training loop
+    for epoch in range(5):  # Test with 5 epochs
+        optimizer.zero_grad()
+        
+        # Forward pass through pipeline
+        profit, p_opt, q_opt, h_opt, p_sim_clb, q_sim_clb, h_sim_clb, v_low_clb, c, d, e, a, b, w_p, w_q, w_h = pipeline.forward(
+            test_power, test_head, DA_price_hour, DA_price_quarter
+        )
+        
+        # Loss is negative profit (since we want to maximize profit)
+        loss = -profit
+        
+        # Backward pass
+        loss.backward()
+        
+        # Print gradients of weight network parameters
+        print(f"\nEpoch {epoch + 1}")
+        print("Weight network gradients:")
+        for name, param in pipeline.weight_network.named_parameters():
+            if param.grad is not None:
+                print(f"{name}: grad shape={param.grad.shape}, grad mean={param.grad.mean():.6f}")
+            else:
+                print(f"{name}: No gradient")
+        
+        # Print loss
+        print(f"Loss: {loss.item():.2f}")
+        
+        # Update weights
+        optimizer.step()
+
+if __name__ == "__main__":
+    test_pipeline_backprop()
 
 # %%
 '''
 1. back propagation
 2. epocs on 10 days of decisions (double for loop: database of 10 days; epocs)
 '''
-# %%
+
+# %% Test the pipeline forward pass
+params = HydroParameters()
+pipeline = Pipeline(params)
+
+profit, p_opt, q_opt, h_opt, p_sim_clb, q_sim_clb, h_sim_clb, v_low_clb, c, d, e, a, b, w_p, w_q, w_h = pipeline.forward(power, head, DA_price_hour, DA_price_quarter)
+
+# %% Plot and print results of forward pass
 def plot_optimization_simulation_results(p_opt, q_opt, p_sim_clb, q_sim_clb, h_sim_clb, v_low_clb, max_vol_low=max_vol_low, save_path="optimization_simulation_results.svg"):
     """
     Plot optimization and simulation results comparison with upper reservoir volume and save as SVG
@@ -715,7 +1422,6 @@ def plot_optimization_simulation_results(p_opt, q_opt, p_sim_clb, q_sim_clb, h_s
 
 plot_optimization_simulation_results(p_opt, q_opt, p_sim_clb, q_sim_clb, h_sim_clb, v_low_clb)
 
-# %%
 # print optimal power, flow, head, and volume
 print("Optimized Power Schedule:")
 print(p_opt.detach().numpy())
@@ -727,3 +1433,5 @@ print("\nOptimized Lower Reservoir Volume Schedule:")
 print(v_low_clb.detach().numpy())
 print("\nProfit:")
 print(profit)
+
+# %%

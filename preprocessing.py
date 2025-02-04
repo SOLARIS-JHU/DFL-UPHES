@@ -551,35 +551,49 @@ def predict_q_poly(p, h, coefs_tur=coefs_tur,
     """
     q = UPC(p,h)
     Directly predict q value using parameters extracted from the model
+    
+    Args:
+        p: 1D torch tensor of power values
+        h: 1D torch tensor of head values
+        coefs_tur: torch tensor of turbine model coefficients 
+        intercept_tur: torch tensor of turbine model intercept
+        coefs_pump: torch tensor of pump model coefficients
+        intercept_pump: torch tensor of pump model intercept
+        poly_degree: degree of polynomial features
+        
+    Returns:
+        1D torch tensor of predicted flow values
     """
-    # Manually calculate polynomial features
-    features = torch.zeros((poly_degree + 1) * (poly_degree + 2) // 2 - 1, dtype=torch.float32)
+    # Manually calculate polynomial features 
+    features = torch.zeros((p.shape[0], (poly_degree + 1) * (poly_degree + 2) // 2 - 1), dtype=torch.float32)
     index = 0
     for i in range(poly_degree + 1):
         for j in range(i + 1):
             if i > 0 or j > 0:
-                features[index] = (p ** (i-j)) * (h ** j)
+                features[:, index] = (p ** (i-j)) * (h ** j)
                 index += 1
 
-    # Predict q using turbine or pump model based on the sign of p
-    if p > 0:
-        q_predicted = torch.dot(features, coefs_tur) + intercept_tur
-    elif p < 0:
-        q_predicted = torch.dot(features, coefs_pump) + intercept_pump
-    else:
-        q_predicted = torch.tensor(0.0)
+    # Calculate predictions using both models
+    q_tur = torch.matmul(features, coefs_tur) + intercept_tur
+    q_pump = torch.matmul(features, coefs_pump) + intercept_pump
+    
+    # Use torch.where for differentiable selection
+    q_predicted = torch.where(p > 0, q_tur, 
+                            torch.where(p < 0, q_pump, 
+                                      torch.zeros_like(p)))
 
     return q_predicted
 
 # # Test the function
 # if __name__ == '__main__':
 #     # Define example inputs
-#     p_example = -4.6
-#     h_example = 67
+#     p_example = torch.tensor([-5.89, 0.0, 5.89], dtype=torch.float32)
+#     h_example = torch.tensor([78, 67, 91], dtype=torch.float32)
+#     # Expected outputs [-8.984, 0.0, 7.906] 
 
 #     # Predict the flow q
 #     q_predicted = predict_q_poly(p_example, h_example)
-#     print(f"Predicted flow (q) for p={p_example}, h={h_example}:\n{q_predicted}")
+#     print(f"Predicted flow (q) for p={p_example.tolist()}, h={h_example.tolist()}:\n{q_predicted.tolist()}")
 
 # %% 
 # Save preprocessing functions and variables
