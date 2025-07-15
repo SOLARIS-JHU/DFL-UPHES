@@ -7,7 +7,14 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 import warnings
+import csv
+import json
 warnings.filterwarnings('ignore')
+import csv
+import json
+import os
+
+device = torch.device("cpu")
 
 def load_new_price_data(file_path="./Data/price_data_2024.csv"):
     """
@@ -362,7 +369,7 @@ def comprehensive_belgium_validation(new_price_data, belgium_db_path="./Data/Bel
         return None
     
     # Create results directory
-    results_dir = Path("./validation_results/belgium_matching")
+    results_dir = Path("./validation_results/belgium_matching_manhhattan")
     results_dir.mkdir(exist_ok=True, parents=True)
     
     # Store all results
@@ -523,9 +530,67 @@ def generate_belgium_analysis(all_results, results_dir, distance_metric):
     
     print(f"Analysis completed and saved to {results_dir}")
 
+
+def save_belgium_historical_data(new_price_data, belgium_db_path="./Data/Belgium.csv", 
+                                distance_metric='euclidean'):
+    """
+    Find closest Belgium matches and save the HISTORICAL dates and prices for piecewise optimization.
+    
+    Args:
+        new_price_data: Dictionary with new price data (from load_new_price_data)
+        belgium_db_path: Path to Belgium.csv file
+        distance_metric: Distance metric to use (default: 'euclidean')
+    """
+    # Load Belgium database
+    belgium_price_db = load_belgium_price_database(belgium_db_path)
+    if not belgium_price_db:
+        print("Failed to load Belgium database")
+        return None
+    
+    # Create Data directory if it doesn't exist
+    os.makedirs('./Data', exist_ok=True)
+    
+    # Prepare data for saving - using HISTORICAL dates and prices
+    historical_data = []
+    used_dates = set()  # Track to avoid duplicates
+    
+    print(f"Finding closest Belgium matches for {len(new_price_data)} dates...")
+    
+    for new_date, new_price in tqdm(new_price_data.items(), desc="Processing dates"):
+        
+        # Find closest match using Euclidean distance
+        closest_date, closest_distance, closest_price = find_closest_date_belgium(
+            new_price, belgium_price_db, distance_metric=distance_metric
+        )
+        
+        if closest_date and closest_date not in used_dates:
+            # Convert price array to comma-separated string
+            prices_str = ','.join([f"{price:.6f}" for price in closest_price])
+            
+            # Save the HISTORICAL date and prices (not the 2024 date)
+            historical_data.append({
+                'date': closest_date,  # Use Belgium historical date
+                'prices_hourly': prices_str,
+                'matched_from_2024_date': new_date,  # Optional: track which 2024 date it came from
+                'distance': closest_distance
+            })
+            
+            used_dates.add(closest_date)
+            print(f"Added historical date {closest_date} (matched from {new_date}, distance: {closest_distance:.4f})")
+    
+    # Save to CSV
+    df_historical = pd.DataFrame(historical_data)
+    output_path = './Data/Belgium_historical_data.csv'
+    df_historical.to_csv(output_path, index=False)
+    
+    print(f"Saved Belgium historical data to {output_path}")
+    print(f"Format: {len(df_historical)} unique historical dates with columns: {list(df_historical.columns)}")
+    
+    return df_historical
+
 # Example usage function
 def test_belgium_matching():
-    """Test function to demonstrate Belgium price matching."""
+    """Test function to demonstrate Belgium price matching and save historical data."""
     
     # Load new price data (your existing function)
     new_price_data = load_new_price_data("./Data/price_data_2024.csv")
@@ -534,15 +599,22 @@ def test_belgium_matching():
         print("Could not load new price data")
         return
     
-    # Run comprehensive Belgium validation
+    # Save Belgium historical data for piecewise optimization
+    historical_df = save_belgium_historical_data(
+        new_price_data, 
+        belgium_db_path="./Data/Belgium.csv",
+        distance_metric='euclidean'
+    )
+    
+    # Optional: Run comprehensive validation (creates detailed analysis)
     results = comprehensive_belgium_validation(
         new_price_data, 
         belgium_db_path="./Data/Belgium.csv",
-        distance_metric='euclidean',  # or 'manhattan', 'cosine'
+        distance_metric='euclidean',
         top_k=5
     )
     
-    return results
+    return results, historical_df
 
 # # Uncomment to run the test
 if __name__ == "__main__":

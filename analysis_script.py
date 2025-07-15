@@ -12,8 +12,8 @@ def load_master_benchmark():
     Load the master benchmark data from the validation results.
     """
     # Path to the master benchmark file
-    benchmark_file = Path("./validation_results/comprehensive/master_validation_benchmarks.csv")
-    
+    benchmark_file = Path("./custom_validation_results/comprehensive/master_validation_benchmarks.csv")
+
     if not benchmark_file.exists():
         raise FileNotFoundError(f"Benchmark file not found at {benchmark_file}")
     
@@ -63,7 +63,7 @@ def analyze_normal_dates(normal_df):
     print("\n--- Analyzing Normal Dates (excluding 2024-12-12) ---")
     
     # Create output directories for different plot types
-    output_dir = Path("./validation_results/analysis_without_extreme")
+    output_dir = Path("./custom_validation_results/analysis_without_extreme")
     density_dir = output_dir / "density_plots"
     variance_dir = output_dir / "variance_plots"
     
@@ -306,7 +306,7 @@ def generate_latex_summary_table(normal_df):
     print("\n--- Generating LaTeX Summary Table for Model Settings ---")
     
     # Create output directory if it doesn't exist
-    output_dir = Path("./validation_results/analysis_without_extreme")
+    output_dir = Path("./custom_validation_results/analysis_without_extreme")
     output_dir.mkdir(exist_ok=True, parents=True)
     
     # Calculate means by different configurations
@@ -364,7 +364,7 @@ def generate_expost_profit_time_table(normal_df):
     print("\n--- Generating Configuration Comparison Table for Ex-post Profit and Time ---")
     
     # Create output directory if it doesn't exist
-    output_dir = Path("./validation_results/analysis_without_extreme")
+    output_dir = Path("./custom_validation_results/analysis_without_extreme")
     output_dir.mkdir(exist_ok=True, parents=True)
     
     # Group by configuration parameters
@@ -489,7 +489,7 @@ Date & Time (s) & Expected Profit & SI Penalty & Vol Penalty & Op Cost & Ex-post
     latex_table = latex_header + latex_rows + latex_footer
     
     # Save the LaTeX table to a file
-    output_dir = Path("./validation_results/analysis_without_extreme")
+    output_dir = Path("./custom_validation_results/analysis_without_extreme")
     output_dir.mkdir(exist_ok=True, parents=True)
     
     with open(output_dir / 'best_model_table.tex', 'w') as f:
@@ -511,7 +511,7 @@ def analyze_extreme_date(extreme_df, normal_df):
         return
     
     # Create output directory for extreme date analysis
-    output_dir = Path("./validation_results/analysis_extreme_date")
+    output_dir = Path("./custom_validation_results/analysis_extreme_date")
     output_dir.mkdir(exist_ok=True, parents=True)
     
     # 1. Compare simulated profit across configurations
@@ -614,7 +614,7 @@ def load_model_comparison_data(normal_df, extreme_df):
     print("\n--- Loading Data for Model Comparison ---")
     
     # Create output directory
-    output_dir = Path("./validation_results/model_comparison")
+    output_dir = Path("./custom_validation_results/model_comparison")
     output_dir.mkdir(exist_ok=True, parents=True)
     
     # 1. Load Global Linear model data
@@ -798,7 +798,7 @@ def generate_model_comparison_plots(all_models_df):
     print("\n--- Generating Model Comparison Plots (Excluding Extreme Date) ---")
     
     # Create output directory
-    output_dir = Path("./validation_results/model_comparison/plots")
+    output_dir = Path("./custom_validation_results/model_comparison/plots")
     output_dir.mkdir(exist_ok=True, parents=True)
     
     # Define metrics to compare
@@ -1000,7 +1000,7 @@ def analyze_extreme_date_model_comparison(all_models_extreme_df):
         return
     
     # Create output directory for extreme date analysis
-    output_dir = Path("./validation_results/model_comparison/extreme_date")
+    output_dir = Path("./custom_validation_results/model_comparison/extreme_date")
     output_dir.mkdir(exist_ok=True, parents=True)
     
     # Define metrics to compare
@@ -1254,8 +1254,8 @@ def main():
     # Generate comparison plots (excluding extreme date)
     generate_model_comparison_plots(all_models_df)
     
-    # Generate comparison tables (excluding extreme date)
-    generate_model_comparison_tables(all_models_df, global_linear_df, sos2_df, nn_mpc_df, best_dfl_df)
+    # # Generate comparison tables (excluding extreme date)
+    # generate_model_comparison_tables(all_models_df, global_linear_df, sos2_df, nn_mpc_df, best_dfl_df)
     
     # Analysis D: Extreme date model comparison analysis
     if not all_models_extreme_df.empty:

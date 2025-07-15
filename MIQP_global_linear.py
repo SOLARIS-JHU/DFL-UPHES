@@ -34,18 +34,26 @@ h_vlow_coeff_lin = h_vlow_coeff_lin.detach().numpy()
 
 # %% Load day-ahead prices
 def load_prices():
-    """Load day-ahead prices from database and set as environment variables."""
-    # Read price database
-    df = pd.read_csv("./Data/price_database_2.csv")
+    """Load day-ahead prices from Belgium historical database."""
+    # Load Belgium historical data
+    belgium_file = "./Data/Belgium_historical_data.csv"
     
-    # Process each day's prices
-    price_data = {}
-    for _, row in df.iterrows():
-        date = row['date']
-        prices = eval(row['prices_hourly'])  # Convert string to list
-        price_data[date] = prices
-
-    return price_data
+    if os.path.exists(belgium_file):
+        print("Loading Belgium historical data...")
+        df = pd.read_csv(belgium_file)
+        
+        # Process each day's prices
+        price_data = {}
+        for _, row in df.iterrows():
+            date = row['date']  # This is now the Belgium historical date
+            prices = [float(p) for p in row['prices_hourly'].split(',')]
+            price_data[date] = prices
+        
+        print(f"Loaded Belgium historical data for {len(price_data)} days")
+        return price_data
+    
+    else:
+        raise FileError("Belgium historical data file not found. Please run price_matcher.py first.")
 
 if __name__ == "__main__":
     prices = load_prices()
@@ -57,8 +65,6 @@ if __name__ == "__main__":
 
 
 # %% MILP Optimizer
-
-
 class MILPOptimizer:
     def __init__(self, T, DA_prices, C_op=3.8, M_p=10000, h_init=head_init, h_min=head_min, h_max=head_max, v_low_init=v_low_init, v_low_target=target_vol_low, h_target=target_head):
         """
@@ -255,9 +261,8 @@ if __name__ == "__main__":
     })
     
     # Save benchmark metrics to CSV
-    benchmark_df.to_csv("Benchmark/global_linearized_operational_data.csv", index=False)
-    
-    print("Benchmark metrics saved to Benchmark/global_linearized_operational_data.csv")
+    benchmark_df.to_csv("Benchmark/global_linear_database_bm.csv", index=False)
+    print("Benchmark metrics saved to Benchmark/global_linear_database_bm.csv")
 
 # # %% Test MILP optimizer for a single date
 # if __name__ == "__main__":
@@ -355,8 +360,8 @@ if __name__ == "__main__":
         df_list.append(df)
     
     final_df = pd.concat(df_list, ignore_index=True)
-    final_df.to_csv("./Data/database_no_piecewise.csv", index=False)
-    print("\nResults saved to ./Data/database_no_piecewise.csv")
+    final_df.to_csv("./Data/global_linear_database.csv", index=False)
+    print("\nResults saved to ./Data/global_linear_database.csv")
 
 # %% Modified plotting code to show modes clearer
 if __name__ == "__main__":
@@ -1036,3 +1041,128 @@ if __name__ == "__main__":
     plt.close()
     
     print("\nPlots saved to Data directory.")
+
+# %% Import libraries
+import pandas as pd
+import numpy as np
+import dill as pickle
+
+# %% Load preprocessed coefficients
+print("Loading preprocessed coefficients...")
+with open('preprocess.pkl', 'rb') as f:
+    v_low_h_coeffs, h_v_coeffs, v_low_to_h_fitted, v_low_h_poly, h_vlow_coeff_lin, coefs_tur_lin, intercept_tur_lin, coefs_pump_lin, intercept_pump_lin, predict_q_linear_tur,predict_q_linear_pump, h_to_v_low_lin, h_fit, neg_min_fit, neg_max_fit, pos_min_fit, pos_max_fit, h_v_poly, h_v_coeffs, DA_price_hour, DA_price_quarter, h_to_v_low_fitted, predict_q_poly, neg_min, neg_max, pos_min, pos_max, prepare_and_fit_model, get_UPC_bound, LR_UPC_bound = pickle.load(f)
+
+# Convert h_vlow_coeff_lin to numpy array if it's a tensor
+if hasattr(h_vlow_coeff_lin, 'detach'):
+    h_vlow_coeff_lin = h_vlow_coeff_lin.detach().numpy()
+
+print(f"Linear coefficients for volume calculation: {h_vlow_coeff_lin}")
+
+# %% Function to calculate volume from head using global linearization
+def calculate_volume_from_head(head_values, coefficients):
+    """
+    Calculate volume using the same global linearization method from MILP optimizer.
+    
+    Volume = coefficients[0] * head + coefficients[1]
+    
+    Args:
+        head_values: Array of head values (m)
+        coefficients: Linear coefficients [slope, intercept]
+    
+    Returns:
+        Array of volume values (m³)
+    """
+    return coefficients[0] * head_values + coefficients[1]
+
+# %% Process Belgium historical data (global_linear_database.csv)
+print("\nProcessing Belgium historical data...")
+try:
+    df_belgium = pd.read_csv("./Data/global_linear_database.csv")
+    print(f"Loaded Belgium data with {len(df_belgium)} rows")
+    
+    # Calculate volume using the same method as in MILP optimization
+    df_belgium['Volume'] = calculate_volume_from_head(df_belgium['Head'], h_vlow_coeff_lin)
+    
+    # Save updated file
+    df_belgium.to_csv("./Data/global_linear_database.csv", index=False)
+    print("Updated Belgium data saved with Volume column")
+    
+    # Display sample of the updated data
+    print("\nSample of Belgium data with Volume column:")
+    print(df_belgium[['Time', 'Head', 'Volume', 'Date']].head(10))
+    
+except FileNotFoundError:
+    print("Belgium historical data file not found: ./Data/global_linear_database.csv")
+except Exception as e:
+    print(f"Error processing Belgium data: {e}")
+
+# %% Process 2024 data (database_no_piecewise_2024.csv)
+print("\nProcessing 2024 data...")
+try:
+    df_2024 = pd.read_csv("./Data/database_no_piecewise_2024.csv")
+    print(f"Loaded 2024 data with {len(df_2024)} rows")
+    
+    # Calculate volume using the same method as in MILP optimization
+    df_2024['Volume'] = calculate_volume_from_head(df_2024['Head'], h_vlow_coeff_lin)
+    
+    # Save updated file
+    df_2024.to_csv("./Data/database_no_piecewise_2024.csv", index=False)
+    print("Updated 2024 data saved with Volume column")
+    
+    # Display sample of the updated data
+    print("\nSample of 2024 data with Volume column:")
+    print(df_2024[['Time', 'Head', 'Volume', 'Date', 'Mode']].head(10))
+    
+    # Display volume statistics
+    print(f"\nVolume Statistics for 2024 data:")
+    print(f"Min Volume: {df_2024['Volume'].min():.2f} m³")
+    print(f"Max Volume: {df_2024['Volume'].max():.2f} m³")
+    print(f"Mean Volume: {df_2024['Volume'].mean():.2f} m³")
+    print(f"Std Volume: {df_2024['Volume'].std():.2f} m³")
+    
+except FileNotFoundError:
+    print("2024 data file not found: ./Data/database_no_piecewise_2024.csv")
+except Exception as e:
+    print(f"Error processing 2024 data: {e}")
+
+# %% Verify volume calculation consistency
+print("\nVerifying volume calculation consistency...")
+try:
+    # Load both datasets to compare
+    df_belgium = pd.read_csv("./Data/global_linear_database.csv")
+    df_2024 = pd.read_csv("./Data/database_no_piecewise_2024.csv")
+    
+    # Check if volumes are reasonable by comparing to head range
+    print(f"Belgium data - Head range: {df_belgium['Head'].min():.2f} - {df_belgium['Head'].max():.2f} m")
+    print(f"Belgium data - Volume range: {df_belgium['Volume'].min():.2f} - {df_belgium['Volume'].max():.2f} m³")
+    
+    print(f"2024 data - Head range: {df_2024['Head'].min():.2f} - {df_2024['Head'].max():.2f} m")
+    print(f"2024 data - Volume range: {df_2024['Volume'].min():.2f} - {df_2024['Volume'].max():.2f} m³")
+    
+    # Verify linear relationship (should be perfect correlation)
+    belgium_corr = np.corrcoef(df_belgium['Head'], df_belgium['Volume'])[0,1]
+    data_2024_corr = np.corrcoef(df_2024['Head'], df_2024['Volume'])[0,1]
+    
+    print(f"\nCorrelation between Head and Volume (should be ~1.0):")
+    print(f"Belgium data: {belgium_corr:.6f}")
+    print(f"2024 data: {data_2024_corr:.6f}")
+    
+    if abs(belgium_corr - 1.0) < 1e-10 and abs(data_2024_corr - 1.0) < 1e-10:
+        print("✓ Volume calculation verified - perfect linear relationship maintained")
+    else:
+        print("⚠ Warning: Volume calculation may have issues - correlation not perfect")
+    
+except Exception as e:
+    print(f"Error during verification: {e}")
+
+# %% Display the linear relationship formula
+print(f"\nLinear relationship used (same as in MILP optimization):")
+print(f"Volume = {h_vlow_coeff_lin[0]:.6f} * Head + {h_vlow_coeff_lin[1]:.6f}")
+print(f"Where Head is in meters [m] and Volume is in cubic meters [m³]")
+
+print("\n" + "="*60)
+print("Volume column successfully added to both datasets!")
+print("Files updated:")
+print("- ./Data/global_linear_database.csv")
+print("- ./Data/database_no_piecewise_2024.csv")
+print("="*60)
