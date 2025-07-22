@@ -7,7 +7,7 @@ from cvxpylayers.torch import CvxpyLayer
 import dill as pickle
 import pandas as pd
 import sys
-from tqdm import tqdm, trange
+# from tqdm import tqdm, trange
 import matplotlib.pyplot as plt
 import numpy as np
 import torch.optim as optim
@@ -27,8 +27,9 @@ with open('preprocess.pkl', 'rb') as f:
     v_low_h_coeffs, h_v_coeffs, v_low_to_h_fitted, v_low_h_poly, h_vlow_coeff_lin, coefs_tur_lin, intercept_tur_lin, coefs_pump_lin, intercept_pump_lin, predict_q_linear_tur,predict_q_linear_pump, h_to_v_low_lin, h_fit, neg_min_fit, neg_max_fit, pos_min_fit, pos_max_fit, h_v_poly, h_v_coeffs, DA_price_hour, DA_price_quarter, h_to_v_low_fitted, predict_q_poly, neg_min, neg_max, pos_min, pos_max, prepare_and_fit_model, get_UPC_bound, LR_UPC_bound = pickle.load(f)
 
 head_init = torch.tensor(77.0, device=device)  # Initial head value
+print(f"Initial head: {head_init.item()}")
 v_low_init = torch.tensor(h_to_v_low_fitted(head_init), device=device)  # Initial lower reservoir volume
-
+print(f"Initial head: {head_init.item()}, Initial v_low: {v_low_init.item()}")
 def hourly_to_quarterly(tensor_data):
     return tensor_data.repeat_interleave(4)
 

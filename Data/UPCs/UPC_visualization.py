@@ -1,19 +1,20 @@
-#%%
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
-3D + 2D Contour Visualization of Reversible Francis Turbine UPC
+3D + 2D Contour Visualization of Reversible Francis Turbine UPC with Linear & Polynomial Approximations
 – Power (–10→10 MW) & Head (50→100 m) axes equal length.
 – Contours projected onto the power–head plane at min(flow).
 – Dashed projection lines from the 4 true corners of both pump & turbine surfaces.
 – Prints out those corner coordinates for verification.
-– 2D contour heatmaps with isolines.
+– 6 total 2D contour heatmaps with isolines:
+  * Original UPC: pump mode and turbine mode
+  * Linear approximation: pump mode and turbine mode  
+  * Polynomial approximation: pump mode and turbine mode
 – Uses "nipy_spectral" for a vivid palette.
 – Adds 3D labels for Pump Mode, Turbine Mode, Idle Mode with leader lines from surface midpoints.
 – Higher-resolution color gradients: increased mesh sampling & more contour levels.
-– Saves all figures as SVG files.
+– Compares original UPC surfaces with linear and polynomial fitted surfaces in 3D visualizations.
+– Saves all figures as SVG files (9 total: 3 3D plots + 6 2D contour plots).
 """
-
+#%% Imports and setup
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -74,7 +75,7 @@ fig = plt.figure(figsize=(8,6), dpi=300)
 ax  = fig.add_subplot(111, projection='3d')
 
 # Equal-aspect for Power & Head
-dp = power_all.ptp()
+dp = np.ptp(power_all)
 dq = vmax - vmin
 ax.set_box_aspect((dp, dp, dq))
 
@@ -162,7 +163,7 @@ Visualize the global linear approximation surfaces alongside original UPC data.
 """
 device = torch.device("cpu")
 # Load preprocessed linear models & data
-with open('preprocess.pkl', 'rb') as f:
+with open('../../preprocess.pkl', 'rb') as f:
     v_low_h_coeffs, h_v_coeffs, v_low_to_h_fitted, v_low_h_poly, h_vlow_coeff_lin, coefs_tur_lin, intercept_tur_lin, coefs_pump_lin, intercept_pump_lin, predict_q_linear_tur,predict_q_linear_pump, h_to_v_low_lin, h_fit, neg_min_fit, neg_max_fit, pos_min_fit, pos_max_fit, h_v_poly, h_v_coeffs, DA_price_hour, DA_price_quarter, h_to_v_low_fitted, predict_q_poly, neg_min, neg_max, pos_min, pos_max, prepare_and_fit_model, get_UPC_bound, LR_UPC_bound = pickle.load(f)
 
 h_min, h_max = np.min(h_fit), np.max(h_fit)
@@ -191,7 +192,7 @@ q_lin_turbine[~mask_turb_lin] = np.nan
 fig_lin = plt.figure(figsize=(8,6), dpi=300)
 ax_lin = fig_lin.add_subplot(111, projection='3d')
 
-dp = power_all.ptp()
+dp = np.ptp(power_all)
 dz = vmax - vmin
 ax_lin.set_box_aspect((dp, dp, dz))
 ax_lin.get_proj = lambda: np.dot(Axes3D.get_proj(ax_lin), np.diag([1,1,0.9,1]))
@@ -266,7 +267,7 @@ fig = plt.figure(figsize=(8, 6), dpi=300)
 ax = fig.add_subplot(111, projection='3d')
 
 # equal-aspect in x/y, adjust z-scale
-dp = power_all.ptp(); dz = vmax - vmin
+dp = np.ptp(power_all); dz = vmax - vmin
 ax.set_box_aspect((dp, dp, dz))
 ax.get_proj = lambda: np.dot(Axes3D.get_proj(ax), np.diag([1,1,0.9,1]))
 
@@ -303,3 +304,54 @@ plt.tight_layout()
 plt.savefig('polynomial_vs_linear_3d_depthsorted.svg', bbox_inches='tight')
 plt.show()
 
+#%% 2D Contour Plots for Linear and Polynomial Approximations
+"""
+Create 2D contour heatmaps for both linear and polynomial approximations
+- Linear pump mode and turbine mode contours
+- Polynomial pump mode and turbine mode contours
+- Same styling as original UPC contours for consistency
+"""
+
+levels2d = np.linspace(vmin, vmax, 200)
+
+# Linear approximation contours
+linear_data = [
+    (P_p_lin, H_p_lin, q_lin_pump, 'Linear Pump Mode'),
+    (P_t_lin, H_t_lin, q_lin_turbine, 'Linear Turbine Mode')
+]
+
+for Pg, Hg, Fa, title in linear_data:
+    fig, ax = plt.subplots(figsize=(6,5), dpi=300)
+    cf = ax.contourf(Pg, Hg, Fa, levels=levels2d, cmap=cmap, vmin=vmin, vmax=vmax)
+    ct = ax.contour(Pg, Hg, Fa, levels=20, colors='k', linewidths=0.8)
+    ax.clabel(ct, fmt='%1.1f', fontsize=8)
+    ax.set_title(f"{title} Flow Rate Contours")
+    ax.set_xlabel('Power (MW)')
+    ax.set_ylabel('Head (m)')
+    fig.colorbar(cf, ax=ax, label='Flow Rate (m³/s)')
+    plt.tight_layout()
+    
+    filename = f"francis_turbine_{title.lower().replace(' ', '_')}_contours.svg"
+    plt.savefig(filename, format='svg', bbox_inches='tight')
+    plt.show()
+
+# Polynomial approximation contours  
+polynomial_data = [
+    (P_p_poly, H_p_poly, qt_pump, 'Polynomial Pump Mode'),
+    (P_t_poly, H_t_poly, qt_turb, 'Polynomial Turbine Mode')
+]
+
+for Pg, Hg, Fa, title in polynomial_data:
+    fig, ax = plt.subplots(figsize=(6,5), dpi=300)
+    cf = ax.contourf(Pg, Hg, Fa, levels=levels2d, cmap=cmap, vmin=vmin, vmax=vmax)
+    ct = ax.contour(Pg, Hg, Fa, levels=20, colors='k', linewidths=0.8)
+    ax.clabel(ct, fmt='%1.1f', fontsize=8)
+    ax.set_title(f"{title} Flow Rate Contours")
+    ax.set_xlabel('Power (MW)')
+    ax.set_ylabel('Head (m)')
+    fig.colorbar(cf, ax=ax, label='Flow Rate (m³/s)')
+    plt.tight_layout()
+    
+    filename = f"francis_turbine_{title.lower().replace(' ', '_')}_contours.svg"
+    plt.savefig(filename, format='svg', bbox_inches='tight')
+    plt.show()

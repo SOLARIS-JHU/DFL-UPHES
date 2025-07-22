@@ -28,32 +28,8 @@ from Library.V_H_relations import r, m, head_max, head_min, h_dead_up, h_normal_
 # %% 
 # Read DA Prices
 
-def read_da_price(date, file_path="./Data/Day-ahead Prices_202301010000-202401010000-2.csv"):
-    """
-    Input: "MM.DD.YYYY", "./Data/Day-ahead Prices_202301010000-202401010000-2.csv"
-    """
-    # Load the data
-    data = pd.read_csv(file_path)
-    
-    # Convert the date string to datetime format for easier filtering
-    data['Date'] = pd.to_datetime(data['MTU (CET/CEST)'].str[:10], format='%d.%m.%Y')
-    
-    # Filter the data for the given date
-    filtered_data = data[data['Date'] == date]['Day-ahead Price [EUR/MWh]']
-    
-    # Convert the series to a torch tensor
-    tensor_data = torch.tensor(filtered_data.values, dtype=torch.float).to(device)
-    
-    return tensor_data
-
-def hourly_to_quarterly(tensor_data):
-    # Repeat each element in the tensor 4 times
-    quarterly_data = tensor_data.repeat_interleave(4)
-    return quarterly_data
-
-sample_date = "04.25.2023"
-DA_price_hour = read_da_price(sample_date)
-DA_price_quarter = hourly_to_quarterly(DA_price_hour)
+DA_price_hour = torch.tensor([], dtype=torch.float).to(device)
+DA_price_quarter = torch.tensor([], dtype=torch.float).to(device)
 
 # %% Linear regression on UPC boundaries (outside thepipeline)
 # Linear regression on UPC boundaries
