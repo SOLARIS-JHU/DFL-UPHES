@@ -1,3 +1,16 @@
+"""
+MIQP Global Linear Optimization Script
+
+Mixed-Integer Quadratic Programming approach for pumped hydro energy storage optimization 
+using global linearization of nonlinear UPC and volume-head relationships.
+
+Input: 2024 price data from ../../Data/price_data_2024.csv
+Output: 
+- MILP_global_linear_results.csv (detailed hourly results)
+- MILP_global_linear_benchmark.csv (daily performance metrics)
+
+Python interactive is recommended for running this script.
+"""
 # %% Import libraries
 import torch
 import dill as pickle

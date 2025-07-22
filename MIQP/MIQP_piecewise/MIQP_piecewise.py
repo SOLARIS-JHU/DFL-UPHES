@@ -1,3 +1,16 @@
+"""
+MIQP Piecewise Linear Optimization Script
+
+Mixed-Integer Quadratic Programming approach for pumped hydro energy storage optimization 
+using piecewise linearization with SOS2 constraints for nonlinear function approximation.
+
+Input: 2024 price data from ../../Data/price_data_2024.csv
+Output:
+- MIQP_piecewise_results.csv (detailed hourly results)  
+- MIQP_piecewise_benchmark.csv (daily performance metrics)
+
+Python interactive is recommended for running this script.
+"""
 # %% Import libraries
 import torch
 import numpy as np

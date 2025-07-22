@@ -1,3 +1,16 @@
+"""
+MIQP Neural Network Optimization Script
+
+Mixed-Integer Quadratic Programming approach for pumped hydro energy storage optimization 
+using embedded neural networks for nonlinear function approximation.
+
+Input: 2024 price data from ../../Data/price_data_2024.csv
+Output:
+- MIQP_nn_results.csv (detailed hourly results)
+- MIQP_nn_benchmark.csv (daily performance metrics)
+
+Python interactive is recommended for running this script.
+"""
 # %% ---------------------------------------------------------------------------
 # Imports and utility helpers
 # ---------------------------------------------------------------------------
