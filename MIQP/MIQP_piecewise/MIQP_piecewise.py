@@ -1,8 +1,8 @@
 """
-MIQP Piecewise Linear Optimization Script
+MIQP Piecewise Bilinear Optimization Script
 
 Mixed-Integer Quadratic Programming approach for pumped hydro energy storage optimization 
-using piecewise linearization with SOS2 constraints for nonlinear function approximation.
+using piecewise bilinearization with SOS2 constraints for nonlinear function approximation.
 
 Input: 2024 price data from ../../Data/price_data_2024.csv
 Output:
