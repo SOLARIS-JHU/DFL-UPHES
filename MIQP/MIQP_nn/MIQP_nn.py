@@ -548,7 +548,13 @@ def run_miqp_optimization():
             if term_condition in ("infeasible", "infeasibleorunbounded"):
                 print(f"Infeasible solution for {date_str}")
                 continue
-            
+
+            # Get MIP gap (assuming maximization problem)
+            mip_gap = np.abs((results.problem.upper_bound - results.problem.lower_bound)) / np.abs(results.problem.lower_bound)
+
+            # TODO: record mip_gap and solving time for each date
+            # TODO: For each formulation (MIQP_global_linear, MIQP_nn, MIQP_piecewise), record the number of binary variables, continuous variables, and constraints
+
             # Extract optimization results
             expected_profit = pyo.value(model.obj)
             
