@@ -334,7 +334,7 @@ def create_uphes_miqp_model(T, DA_prices):
     model.init_head = pyo.Constraint(expr = model.h[0]     == float(head_init))
     
     # ---------- Objective (MIQP) -------------------------------------------
-    C_op = 3.8
+    C_op = 0.4  # Operational cost coefficient (€/MWh^2)
     model.obj = pyo.Objective(
         expr = sum(
             (model.p_T[t] + model.p_P[t]) * DA_prices[t]
@@ -391,7 +391,7 @@ class HydroParameters:
     def __init__(
         self,
         time_horizon=24,
-        operational_cost=3.8,
+        operational_cost=0.4,
         rho=1000,
         g=9.81,
         mu=0.9,
@@ -548,7 +548,27 @@ def run_miqp_optimization():
             if term_condition in ("infeasible", "infeasibleorunbounded"):
                 print(f"Infeasible solution for {date_str}")
                 continue
+
+            # Get MIP gap (assuming maximization problem)
+            mip_gap = np.abs((results.problem.upper_bound - results.problem.lower_bound)) / np.abs(results.problem.lower_bound)
+
+            # TODO: record mip_gap and solving time for each date
+            # TODO: For each formulation (MIQP_global_linear, MIQP_nn, MIQP_piecewise), record the number of binary variables, continuous variables, and constraints
             
+            # Count variables and constraints
+            total_vars = model.nvariables()
+            total_constraints = model.nconstraints()
+
+            # Count binary variables
+            binary_vars = 0
+            continuous_vars = 0
+            for var in model.component_objects(pyo.Var, active=True):
+                for index in var:
+                    if var[index].domain is pyo.Binary:
+                        binary_vars += 1
+                    else:
+                        continuous_vars += 1
+
             # Extract optimization results
             expected_profit = pyo.value(model.obj)
             
@@ -604,6 +624,10 @@ def run_miqp_optimization():
             benchmark_results.append({
                 'Date': date_str,
                 'Solving Time (s)': solution_time,
+                'MIP Gap': mip_gap,
+                'Binary Variables': binary_vars,
+                'Continuous Variables': continuous_vars,
+                'Total Constraints': total_constraints,
                 'Expected Profit (€)': expected_profit,
                 'SI Penalty (€)': si_penalty.item(),
                 'Vol Penalty (€)': vol_penalty.item(),

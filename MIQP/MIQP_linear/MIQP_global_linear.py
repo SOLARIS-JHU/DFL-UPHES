@@ -78,7 +78,7 @@ def read_price_data(file_path="../../Data/price_data_2024.csv"):
 
 # %% MILP Optimizer
 class MILPOptimizer:
-    def __init__(self, T, DA_prices, C_op=3.8, M_p=10000, h_init=head_init, h_min=head_min, h_max=head_max, v_low_init=v_low_init, v_low_target=target_vol_low, h_target=target_head):
+    def __init__(self, T, DA_prices, C_op=0.4, M_p=10000, h_init=head_init, h_min=head_min, h_max=head_max, v_low_init=v_low_init, v_low_target=target_vol_low, h_target=target_head):
         """
         MILP optimizer for initial pipeline points.
         
@@ -240,7 +240,7 @@ class HydroParameters:
     def __init__(
         self,
         time_horizon=24,
-        operational_cost=3.8,
+        operational_cost=0.4,
         rho=1000,
         g=9.81,
         mu=0.9,
@@ -458,6 +458,10 @@ def run_milp_optimization():
             benchmark_results.append({
                 'Date': date_str,
                 'Solving Time (s)': solution_time,
+                'MIP Gap': metrics['MIPGap'],
+                'Binary Variables': metrics['NumBinVars'],
+                'Continuous Variables': metrics['NumVars'] - metrics['NumBinVars'],
+                'Total Constraints': metrics['NumConstrs'],
                 'Expected Profit (€)': metrics['ExpectedProfit'],
                 'SI Penalty (€)': si_penalty.item(),
                 'Vol Penalty (€)': vol_penalty.item(),

@@ -1,8 +1,8 @@
 """
-MIQP Piecewise Linear Optimization Script
+MIQP Piecewise Bilinear Optimization Script
 
 Mixed-Integer Quadratic Programming approach for pumped hydro energy storage optimization 
-using piecewise linearization with SOS2 constraints for nonlinear function approximation.
+using piecewise bilinearization with SOS2 constraints for nonlinear function approximation.
 
 Input: 2024 price data from ../../Data/price_data_2024.csv
 Output:
@@ -71,7 +71,7 @@ def read_price_data(file_path="../../Data/price_data_2024.csv"):
 # %% Piecewise MILP Optimizer with SOS2 constraints
 class PiecewiseMILPOptimizerSOS2:
     def __init__(self, T, DA_prices, num_segments_h=5, num_segments_p_pump=5, num_segments_p_turbine=5, 
-                 C_op=3.8, M_p=10000, h_init=head_init, h_min=head_min, h_max=head_max, 
+                 C_op=0.4, M_p=10000, h_init=head_init, h_min=head_min, h_max=head_max, 
                  v_low_init=v_low_init, v_low_target=target_vol_low):
         """
         MILP optimizer with piecewise linearization for nonlinear functions.
@@ -349,7 +349,7 @@ class PiecewiseMILPOptimizerSOS2:
 # %% Piecewise MILP Optimizer with Big-M quadratic constraints
 class PiecewiseMILPOptimizer:
     def __init__(self, T, DA_prices, num_segments_h=5, num_segments_p_pump=5, num_segments_p_turbine=5, 
-                 C_op=3.8, M_p=10000, h_init=head_init, h_min=head_min, h_max=head_max, 
+                 C_op=0.4, M_p=10000, h_init=head_init, h_min=head_min, h_max=head_max, 
                  v_low_init=v_low_init, v_low_target=target_vol_low):
         """
         MILP optimizer with piecewise linearization for nonlinear functions.
@@ -659,7 +659,7 @@ class HydroParameters:
     def __init__(
         self,
         time_horizon=24,
-        operational_cost=3.8,
+        operational_cost=0.4,
         rho=1000,
         g=9.81,
         mu=0.9,
@@ -825,7 +825,6 @@ def run_piecewise_optimization():
                 num_segments_p_pump=10,
                 num_segments_p_turbine=10
             )
-            optimizer.model.Params.Threads = 16
             
             results, metrics = optimizer.solve()
             
@@ -864,6 +863,10 @@ def run_piecewise_optimization():
             benchmark_results.append({
                 'Date': date_str,
                 'Solving Time (s)': solution_time,
+                'MIP Gap': metrics['MIPGap'],
+                'Binary Variables': metrics['NumBinVars'],
+                'Continuous Variables': metrics['NumVars'] - metrics['NumBinVars'],
+                'Total Constraints': metrics['NumConstrs'],
                 'Expected Profit (€)': metrics['ExpectedProfit'],
                 'SI Penalty (€)': si_penalty.item(),
                 'Vol Penalty (€)': vol_penalty.item(),
