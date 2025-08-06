@@ -105,14 +105,30 @@ except Exception as e:
 
 try:
     # Neural Network imports
+    # Save current directory
+    original_cwd = os.getcwd()
+    
+    # Change to MIQP_nn directory temporarily for model loading
+    miqp_nn_dir = miqp_dir / "MIQP_nn"
+    os.chdir(str(miqp_nn_dir))
+    
     from MIQP_nn import (
         create_uphes_miqp_model,
         HydroParameters as HydroParams_NN,
         SimulationLayer as SimLayer_NN
     )
     import pyomo.environ as pyo
+    
+    # Change back to original directory
+    os.chdir(original_cwd)
+    
     print("✓ Neural Network formulation imported")
 except Exception as e:
+    # Make sure to change back to original directory even if import fails
+    try:
+        os.chdir(original_cwd)
+    except:
+        pass
     print(f"✗ Error importing Neural Network: {e}")
 
 try:
@@ -537,8 +553,8 @@ class MIQPFormulationRunner:
         
         # Process formulations in order: Global Linear -> Piecewise -> Neural Network
         formulation_order = [
-            ('global_linear', 'Global Linear'),
-            ('piecewise', 'Piecewise'),
+            # ('global_linear', 'Global Linear'),
+            # ('piecewise', 'Piecewise'),
             ('neural_network', 'Neural Network')
         ]
         
@@ -705,7 +721,7 @@ def main():
     
     databases = [
         ("euclidean", data_dir / "historical_database_euclidean.csv"),
-        ("pearson", data_dir / "historical_database_pearson.csv"),
+        # ("pearson", data_dir / "historical_database_pearson.csv"),
         # ("cosine", data_dir / "historical_database_cosine.csv")  # Commented out
     ]
     

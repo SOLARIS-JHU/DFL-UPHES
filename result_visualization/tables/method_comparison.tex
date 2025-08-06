@@ -1,0 +1,17 @@
+\begin{table}[h]
+\centering
+\caption{Method Performance Comparison - Mean ± Std Across 19 Dates (Excluding Extreme Date)}
+\label{tab:method_comparison}
+\begin{tabular}{lcccccc}
+\toprule
+Method & Ex-post Profit & Expected Profit & SI Penalty & Volume Penalty & Operating Cost & Processing Time \\
+ & (€) & (€) & (€) & (€) & (€) & (s) \\
+\midrule
+DFL\_Bounded & 3464.70 $\pm$ 1457.13 & 4018.38 $\pm$ 1584.23 & 85.39 $\pm$ 58.40 & 415.08 $\pm$ 589.40 & 294.05 $\pm$ 87.17 & 1.15 $\pm$ 0.03 \\
+DFL\_Unbounded & 3461.25 $\pm$ 1475.39 & 4024.17 $\pm$ 1612.36 & 84.98 $\pm$ 59.94 & 425.26 $\pm$ 627.44 & 295.30 $\pm$ 86.53 & 1.17 $\pm$ 0.06 \\
+MIQP\_Linear & 3409.11 $\pm$ 1433.45 & 3573.26 $\pm$ 1481.13 & 96.96 $\pm$ 39.22 & 28.55 $\pm$ 54.58 & 308.87 $\pm$ 89.66 & 2.69 $\pm$ 6.72 \\
+MIQP\_NN & 1952.36 $\pm$ 955.30 & 2632.99 $\pm$ 1318.62 & 163.22 $\pm$ 288.94 & 445.68 $\pm$ 440.80 & 1143.07 $\pm$ 466.47 & 3386.63 $\pm$ 674.10 \\
+MIQP\_Piecewise & 3805.80 $\pm$ 1404.38 & 4015.74 $\pm$ 1460.42 & 17.15 $\pm$ 67.65 & 183.05 $\pm$ 305.16 & 289.32 $\pm$ 103.92 & 989.69 $\pm$ 1497.23 \\
+\bottomrule
+\end{tabular}
+\end{table}

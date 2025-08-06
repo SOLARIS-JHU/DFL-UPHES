@@ -1,0 +1,52 @@
+Comprehensive Validation Summary
+===============================
+
+Total configurations tested: 180
+Total dates processed: 20
+
+Best Overall Configuration:
+  euclidean_piecewise-LSTM-2L-9iter
+  Database: euclidean_piecewise
+  Architecture: LSTM
+  Number of Layers: 2
+  Max Iterations: 9
+  Average Ex-post Profit: 4210.78
+  Average Processing Time: 1.16 seconds
+
+Performance by Database:
+  euclidean_global_linear:
+    Average Profit: 4012.41
+    Max Profit: 18459.66
+    Min Profit: 1045.71
+    Standard Deviation: 3570.24
+    Best Configuration: RNN, 3 layers, 6 iterations (Profit: 4034.74)
+
+  euclidean_neural_network:
+    Average Profit: 3794.25
+    Max Profit: 16700.35
+    Min Profit: -96.52
+    Standard Deviation: 3100.68
+    Best Configuration: LSTM, 1 layers, 9 iterations (Profit: 3992.95)
+
+  euclidean_piecewise:
+    Average Profit: 4136.76
+    Max Profit: 18588.62
+    Min Profit: 728.10
+    Standard Deviation: 3552.48
+    Best Configuration: LSTM, 2 layers, 9 iterations (Profit: 4210.78)
+
+Performance by Architecture:
+  LSTM:
+    Average Profit: 3980.25
+    Max Profit: 18563.25
+    Min Profit: -42.00
+    Standard Deviation: 3415.24
+    Best Configuration: euclidean_piecewise, 2 layers, 9 iterations (Profit: 4210.78)
+
+  RNN:
+    Average Profit: 3982.04
+    Max Profit: 18588.62
+    Min Profit: -96.52
+    Standard Deviation: 3419.12
+    Best Configuration: euclidean_piecewise, 3 layers, 1 iterations (Profit: 4206.29)
+

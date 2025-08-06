@@ -1,0 +1,6 @@
+Method,CV_Ex_post_Profit
+DFL_Bounded,42.06
+DFL_Unbounded,42.63
+MIQP_Linear,42.05
+MIQP_NN,48.93
+MIQP_Piecewise,36.9

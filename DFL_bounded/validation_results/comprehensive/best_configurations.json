@@ -1,0 +1,142 @@
+{
+    "2024-4-9": {
+        "database": "euclidean_piecewise",
+        "architecture": "RNN",
+        "num_layers": 3,
+        "max_iterations": 9,
+        "profit": 1850.0306396484375
+    },
+    "2024-7-9": {
+        "database": "euclidean_neural_network",
+        "architecture": "RNN",
+        "num_layers": 3,
+        "max_iterations": 1,
+        "profit": 4277.06494140625
+    },
+    "2024-10-5": {
+        "database": "euclidean_piecewise",
+        "architecture": "LSTM",
+        "num_layers": 2,
+        "max_iterations": 1,
+        "profit": 3284.496337890625
+    },
+    "2024-1-30": {
+        "database": "euclidean_piecewise",
+        "architecture": "LSTM",
+        "num_layers": 2,
+        "max_iterations": 1,
+        "profit": 1604.7073974609375
+    },
+    "2024-8-3": {
+        "database": "euclidean_neural_network",
+        "architecture": "LSTM",
+        "num_layers": 1,
+        "max_iterations": 4,
+        "profit": 3378.925537109375
+    },
+    "2024-7-19": {
+        "database": "euclidean_piecewise",
+        "architecture": "RNN",
+        "num_layers": 1,
+        "max_iterations": 9,
+        "profit": 3862.178466796875
+    },
+    "2024-2-14": {
+        "database": "euclidean_neural_network",
+        "architecture": "RNN",
+        "num_layers": 1,
+        "max_iterations": 10,
+        "profit": 1374.887939453125
+    },
+    "2024-11-21": {
+        "database": "euclidean_piecewise",
+        "architecture": "RNN",
+        "num_layers": 2,
+        "max_iterations": 1,
+        "profit": 3344.60498046875
+    },
+    "2024-6-16": {
+        "database": "euclidean_neural_network",
+        "architecture": "LSTM",
+        "num_layers": 1,
+        "max_iterations": 1,
+        "profit": 4047.565185546875
+    },
+    "2024-1-9": {
+        "database": "euclidean_piecewise",
+        "architecture": "RNN",
+        "num_layers": 3,
+        "max_iterations": 1,
+        "profit": 2586.922607421875
+    },
+    "2024-8-15": {
+        "database": "euclidean_piecewise",
+        "architecture": "LSTM",
+        "num_layers": 2,
+        "max_iterations": 7,
+        "profit": 5085.20068359375
+    },
+    "2024-12-12": {
+        "database": "euclidean_piecewise",
+        "architecture": "RNN",
+        "num_layers": 1,
+        "max_iterations": 10,
+        "profit": 18570.3984375
+    },
+    "2024-4-24": {
+        "database": "euclidean_neural_network",
+        "architecture": "LSTM",
+        "num_layers": 1,
+        "max_iterations": 9,
+        "profit": 3267.519775390625
+    },
+    "2024-8-9": {
+        "database": "euclidean_global_linear",
+        "architecture": "LSTM",
+        "num_layers": 3,
+        "max_iterations": 4,
+        "profit": 4507.2646484375
+    },
+    "2024-2-6": {
+        "database": "euclidean_global_linear",
+        "architecture": "LSTM",
+        "num_layers": 1,
+        "max_iterations": 10,
+        "profit": 2967.03076171875
+    },
+    "2024-7-4": {
+        "database": "euclidean_global_linear",
+        "architecture": "LSTM",
+        "num_layers": 1,
+        "max_iterations": 1,
+        "profit": 3511.0458984375
+    },
+    "2024-3-23": {
+        "database": "euclidean_neural_network",
+        "architecture": "RNN",
+        "num_layers": 1,
+        "max_iterations": 7,
+        "profit": 1758.3074951171875
+    },
+    "2024-12-13": {
+        "database": "euclidean_piecewise",
+        "architecture": "LSTM",
+        "num_layers": 2,
+        "max_iterations": 3,
+        "profit": 6944.896484375
+    },
+    "2024-10-21": {
+        "database": "euclidean_global_linear",
+        "architecture": "LSTM",
+        "num_layers": 2,
+        "max_iterations": 6,
+        "profit": 5445.7734375
+    },
+    "2024-8-5": {
+        "database": "euclidean_piecewise",
+        "architecture": "RNN",
+        "num_layers": 3,
+        "max_iterations": 3,
+        "profit": 5265.5224609375
+    }
+}
