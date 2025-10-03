@@ -6,8 +6,8 @@ import os
 
 #%% Database file paths and configurations
 MIQP_PATHS = {
-    'MIQP-L': r'..\MIQP\MIQP_linear\MILP_global_linear_benchmark.csv',
-    'MIQP-P': r'..\MIQP\MIQP_piecewise\MIQP_piecewise_benchmark.csv'
+    'MIQP-Linear': r'..\MIQP\MIQP_linear\MILP_global_linear_benchmark.csv',
+    'MIQP-Piecewise': r'..\MIQP\MIQP_piecewise\MIQP_piecewise_benchmark.csv'
 }
 
 # Path to DFL validation results
@@ -15,6 +15,9 @@ DFL_VALIDATION_PATH = r'..\DFL_noise\validation_results\comprehensive\master_val
 
 # Path to PPO benchmark results
 PPO_BENCHMARK_PATH = r'..\PPO\ppo_comprehensive_benchmark.csv'
+
+# Path to Ablation study results
+ABLATION_BENCHMARK_PATH = r'..\no_NN_ablation\validation_results\ablation_study\ablation_benchmarks.csv'
 
 EXTREME_DATE = '2024-12-12'
 
@@ -73,6 +76,13 @@ def load_miqp_data(file_path, method_name):
     if 'Date' in df.columns:
         df['Date'] = df['Date'].apply(standardize_date_format)
     
+    # Filter out EXTREME_DATE
+    initial_count = len(df)
+    df = df[df['Date'] != EXTREME_DATE].copy()
+    filtered_count = initial_count - len(df)
+    if filtered_count > 0:
+        print(f"  Filtered out {filtered_count} {method_name} records with EXTREME_DATE")
+    
     return df
 
 def load_ppo_data():
@@ -88,6 +98,14 @@ def load_ppo_data():
     except Exception as e:
         print(f"Error loading PPO benchmark: {e}")
         return pd.DataFrame()
+    
+    # Filter out EXTREME_DATE first
+    df['Date'] = df['Date'].apply(standardize_date_format)
+    initial_count = len(df)
+    df = df[df['Date'] != EXTREME_DATE].copy()
+    filtered_count = initial_count - len(df)
+    if filtered_count > 0:
+        print(f"  Filtered out {filtered_count} PPO records with EXTREME_DATE")
     
     # Separate MIQP and PPO rows
     miqp_rows = df[df['Method'] == 'MIQP'].copy()
@@ -120,16 +138,6 @@ def load_ppo_data():
     
     df = ppo_rows.copy()
     print(f"Filtered to {len(df)} PPO-only records")
-    
-    # Standardize date format
-    df['Date'] = df['Date'].apply(standardize_date_format)
-    
-    # Filter out EXTREME_DATE
-    initial_count = len(df)
-    df = df[df['Date'] != EXTREME_DATE].copy()
-    filtered_count = initial_count - len(df)
-    if filtered_count > 0:
-        print(f"Filtered out {filtered_count} PPO records with EXTREME_DATE ({EXTREME_DATE})")
     
     # Create short method name
     def create_ppo_method_name(row):
@@ -165,6 +173,104 @@ def load_ppo_data():
     
     return df
 
+def load_ablation_data():
+    """Load ablation study results and extract best overall configuration (excluding max_iter=1)."""
+    if not os.path.exists(ABLATION_BENCHMARK_PATH):
+        print(f"Warning: Ablation benchmark file not found: {ABLATION_BENCHMARK_PATH}")
+        return pd.DataFrame(), None
+    
+    # Load ablation results
+    df = pd.read_csv(ABLATION_BENCHMARK_PATH)
+    
+    print(f"Loaded {len(df)} ablation study records")
+    
+    # Standardize date format and filter EXTREME_DATE
+    df['Date'] = df['New_Date'].apply(standardize_date_format)
+    initial_count = len(df)
+    df = df[df['Date'] != EXTREME_DATE].copy()
+    filtered_count = initial_count - len(df)
+    if filtered_count > 0:
+        print(f"  Filtered out {filtered_count} ablation records with EXTREME_DATE")
+    
+    # Convert noise level to numeric
+    df['Noise_Level_Numeric'] = pd.to_numeric(df['Noise_Level'], errors='coerce')
+    
+    # Separate random_samples from noise-level databases
+    random_samples_df = df[df['Data_Type'] == 'random_samples'].copy()
+    noise_df = df[df['Noise_Level_Numeric'].notna()].copy()
+    
+    print(f"Noise-level databases: {len(noise_df)} records")
+    print(f"Random samples database: {len(random_samples_df)} records")
+    
+    if len(noise_df) > 0:
+        print(f"Noise levels: {sorted(noise_df['Noise_Level_Numeric'].unique())}")
+    print(f"Weight configs: {df['Weight_Config'].unique()}")
+    print(f"Max iterations range: {df['Max_Iterations'].min()}-{df['Max_Iterations'].max()}")
+    
+    # Find best configuration (excluding max_iter=1)
+    print("\n--- Selecting Best Ablation Configuration (excluding max_iter=1) ---")
+    
+    df_for_best = df[df['Max_Iterations'] > 1].copy()
+    
+    if len(df_for_best) == 0:
+        print("Error: No ablation records with max_iterations > 1")
+        return pd.DataFrame(), None
+    
+    config_means = df_for_best.groupby(['Weight_Config', 'Max_Iterations'])['Ex_post_Profit'].mean()
+    best_config_tuple = config_means.idxmax()
+    best_profit = config_means.max()
+    
+    best_weight_config = best_config_tuple[0]
+    best_iter = best_config_tuple[1]
+    
+    print(f"\nBest ablation configuration (excluding max_iter=1):")
+    print(f"  Weight Config: {best_weight_config}")
+    print(f"  Iterations: {best_iter}")
+    print(f"  Mean ex-post profit: {best_profit:.2f}")
+    
+    # Filter to best configuration
+    best_noise_df = noise_df[
+        (noise_df['Weight_Config'] == best_weight_config) & 
+        (noise_df['Max_Iterations'] == best_iter)
+    ].copy()
+    
+    best_random_df = random_samples_df[
+        (random_samples_df['Weight_Config'] == best_weight_config) & 
+        (random_samples_df['Max_Iterations'] == best_iter)
+    ].copy()
+    
+    print(f"\nBest configuration records:")
+    print(f"  Noise databases: {len(best_noise_df)} records")
+    print(f"  Random samples: {len(best_random_df)} records")
+    
+    # Create ablation methods
+    ablation_methods = []
+    
+    for noise_level in sorted(best_noise_df['Noise_Level_Numeric'].unique()):
+        noise_method_df = best_noise_df[best_noise_df['Noise_Level_Numeric'] == noise_level].copy()
+        noise_pct = int(noise_level * 100)
+        noise_method_df['Method'] = f'No-NN-N{noise_pct}'
+        ablation_methods.append(noise_method_df)
+        print(f"  Created method: No-NN-N{noise_pct} with {len(noise_method_df)} records")
+    
+    if len(best_random_df) > 0:
+        best_random_df['Method'] = 'No-NN-RS'
+        ablation_methods.append(best_random_df)
+        print(f"  Created method: No-NN-RS with {len(best_random_df)} records")
+    
+    if len(ablation_methods) == 0:
+        print("Error: No ablation methods created")
+        return pd.DataFrame(), None
+    
+    combined_ablation = pd.concat(ablation_methods, ignore_index=True)
+    
+    best_config_str = f"{best_weight_config}-{best_iter}iter"
+    
+    print(f"\nTotal ablation records: {len(combined_ablation)}")
+    print(f"Methods created: {sorted(combined_ablation['Method'].unique())}")
+    
+    return combined_ablation, best_config_str
+
 def load_dfl_validation_data():
     """Load DFL validation results and extract:
     1. Best (Architecture, Layers, Iterations) configuration overall
@@ -185,7 +291,7 @@ def load_dfl_validation_data():
     df = df[df['Date_Standardized'] != EXTREME_DATE].copy()
     filtered_count = initial_count - len(df)
     if filtered_count > 0:
-        print(f"Filtered out {filtered_count} records with EXTREME_DATE ({EXTREME_DATE})")
+        print(f"  Filtered out {filtered_count} DFL records with EXTREME_DATE")
     
     # Separate random_samples from noise-level databases
     random_samples_df = df[
@@ -348,7 +454,7 @@ def load_dfl_validation_data():
     return combined_dfl, best_config_str
 
 def load_all_databases():
-    """Load all database results including MIQP, DFL, and PPO."""
+    """Load all database results including MIQP, DFL, PPO, and Ablation."""
     all_data = []
     
     # Load MIQP data
@@ -359,10 +465,10 @@ def load_all_databases():
             print(f"Loaded {len(df)} records from {method}")
     
     # Load DFL validation data (with best configuration selected)
-    dfl_df, best_config = load_dfl_validation_data()
+    dfl_df, dfl_best_config = load_dfl_validation_data()
     if not dfl_df.empty:
         all_data.append(dfl_df)
-        print(f"\nLoaded {len(dfl_df)} DFL records with best config: {best_config}")
+        print(f"\nLoaded {len(dfl_df)} DFL records with best config: {dfl_best_config}")
         print(f"DFL methods: {sorted(dfl_df['Method'].unique())}")
     
     # Load PPO data
@@ -372,17 +478,17 @@ def load_all_databases():
         print(f"\nLoaded {len(ppo_df)} PPO records")
         print(f"PPO methods: {sorted(ppo_df['Method'].unique())}")
     
+    # Load Ablation data
+    ablation_df, ablation_best_config = load_ablation_data()
+    if not ablation_df.empty:
+        all_data.append(ablation_df)
+        print(f"\nLoaded {len(ablation_df)} Ablation records with best config: {ablation_best_config}")
+        print(f"Ablation methods: {sorted(ablation_df['Method'].unique())}")
+    
     if not all_data:
         return pd.DataFrame()
     
     combined_df = pd.concat(all_data, ignore_index=True)
-    
-    # Filter out extreme date
-    initial_count = len(combined_df)
-    combined_df = combined_df[combined_df['Date'] != EXTREME_DATE].copy()
-    filtered_count = initial_count - len(combined_df)
-    if filtered_count > 0:
-        print(f"\nFiltered out {filtered_count} additional records with EXTREME_DATE from MIQP data")
     
     # Ensure numeric columns
     numeric_columns = ['Expected_Profit', 'Ex_post_Profit', 'SI_Penalty', 
@@ -543,13 +649,15 @@ Rank & Method & Mean Ex-post Profit (€) & Processing Time (s) \\
 #%% Main execution
 def main():
     """Main function."""
-    print("Starting LaTeX Table Generation (with No-Recursivity Results)...")
+    print("Starting LaTeX Table Generation (with Ablation Study)...")
     print("="*60)
     print("FEATURES:")
     print("1. Best configuration selected (excluding max_iter=1)")
     print("2. Max_iteration=1 (no recursivity) results included separately")
-    print("3. Concise method naming (MIQP-L, DFL-N5, PPO-RS, etc.)")
-    print("4. PPO benchmark results included")
+    print("3. No-NN ablation study results included (best config)")
+    print("4. Concise method naming (MIQP-Linear, DFL-N5, PPO-RS, No-NN-N10, etc.)")
+    print("5. PPO and No-NN benchmark results included")
+    print("6. EXTREME_DATE filtered from all methods and databases")
     print("="*60)
     
     output_dir = Path(".")
