@@ -715,6 +715,7 @@ class SimulationLayer:
             h_current = h[i]
             p_current = p[i]
             q_candidate = torch.zeros_like(p_current)
+            p_clamped = p_current
 
             if p_current > 0.5:  # Turbine mode
                 p_min_turb = self.params.pos_min(h_current)
@@ -892,5 +893,169 @@ def run_piecewise_optimization():
     print(f"Benchmark results saved to MIQP_piecewise_benchmark.csv ({len(benchmark_results)} rows)")
 
 # %% Execute
+# if __name__ == "__main__":
+#     run_piecewise_optimization()
+
+# %% Rerun missing date 2024/02/14
+import pandas as pd
+import torch
+import time
+
+def rerun_missing_date():
+    """Rerun optimization for missing date 2024/02/14 and append to benchmark CSV."""
+    
+    # Load price data
+    print("Loading price data...")
+    price_data = read_price_data()
+    
+    # Check if the missing date exists in price data
+    target_date = '2024/2/14'  # Correct format without leading zero
+    if target_date not in price_data:
+        print(f"Date {target_date} not found in price data!")
+        return
+    
+    # Load existing benchmark results
+    try:
+        # Try different encodings to handle potential encoding issues
+        try:
+            existing_benchmark = pd.read_csv("MIQP_piecewise_benchmark.csv", encoding='utf-8')
+        except UnicodeDecodeError:
+            try:
+                existing_benchmark = pd.read_csv("MIQP_piecewise_benchmark.csv", encoding='latin-1')
+            except UnicodeDecodeError:
+                existing_benchmark = pd.read_csv("MIQP_piecewise_benchmark.csv", encoding='cp1252')
+        print(f"Loaded existing benchmark with {len(existing_benchmark)} entries")
+        
+        # Check if date already exists in benchmark
+        if target_date in existing_benchmark['Date'].values:
+            print(f"Date {target_date} already exists in benchmark!")
+            return
+            
+    except FileNotFoundError:
+        print("Benchmark file not found, will create new one")
+        existing_benchmark = pd.DataFrame()
+    
+    # Initialize simulation parameters
+    head_init_val = torch.tensor(head_init, dtype=torch.float32, device=device)
+    v_low_init_val = torch.tensor(v_low_init, dtype=torch.float32, device=device)
+    
+    params = HydroParameters(
+        head_init=head_init_val,
+        v_low_init=v_low_init_val,
+        neg_min=neg_min, neg_max=neg_max,
+        pos_min=pos_min, pos_max=pos_max,
+        predict_q_poly=predict_q_poly,
+        h_to_v_low_fitted=h_to_v_low_fitted,
+        v_low_to_h_fitted=v_low_to_h_fitted
+    )
+    
+    simulator = SimulationLayer(params)
+    
+    # Process the missing date
+    prices_24h = price_data[target_date]
+    print(f"Processing {target_date}...")
+    
+    try:
+        start_time = time.time()
+        
+        # Create and solve optimizer (using SOS2 version with 10 segments)
+        T = 24
+        optimizer = PiecewiseMILPOptimizerSOS2(
+            T=T, 
+            DA_prices=prices_24h,
+            num_segments_h=10,
+            num_segments_p_pump=10,
+            num_segments_p_turbine=10
+        )
+        
+        results, metrics = optimizer.solve()
+        
+        solution_time = time.time() - start_time
+        
+        if results is None:
+            print(f"No optimal solution found for {target_date}!")
+            return
+        
+        # Run simulation
+        p_tensor = torch.tensor(results['p'], dtype=torch.float32, device=device)
+        q_tensor = torch.tensor(results['q'], dtype=torch.float32, device=device)
+        h_tensor = torch.tensor(results['h'], dtype=torch.float32, device=device)
+        
+        p_sim, q_sim, h_sim, v_low_sim = simulator.simulate_operation(p_tensor, q_tensor, h_tensor)
+        
+        # Calculate simulation profit
+        da_prices_tensor = torch.tensor(prices_24h, dtype=torch.float32, device=device)
+        profit, si_penalty, vol_penalty, op_cost = simulator.calc_profit(
+            p_sim, p_tensor[:len(p_sim)], v_low_sim, da_prices_tensor[:len(p_sim)]
+        )
+        
+        # Create new benchmark entry
+        new_benchmark_entry = {
+            'Date': target_date,
+            'Solving Time (s)': solution_time,
+            'MIP Gap': metrics['MIPGap'],
+            'Binary Variables': metrics['NumBinVars'],
+            'Continuous Variables': metrics['NumVars'] - metrics['NumBinVars'],
+            'Total Constraints': metrics['NumConstrs'],
+            'Expected Profit (€)': metrics['ExpectedProfit'],
+            'SI Penalty (€)': si_penalty.item(),
+            'Vol Penalty (€)': vol_penalty.item(),
+            'Op Cost (€)': op_cost.item(),
+            'Ex-post Profit (€)': profit.item()
+        }
+        
+        # Append to existing benchmark
+        new_benchmark_df = pd.DataFrame([new_benchmark_entry])
+        updated_benchmark = pd.concat([existing_benchmark, new_benchmark_df], ignore_index=True)
+        
+        # Sort by date to maintain chronological order
+        updated_benchmark['Date'] = pd.to_datetime(updated_benchmark['Date'])
+        updated_benchmark = updated_benchmark.sort_values('Date')
+        updated_benchmark['Date'] = updated_benchmark['Date'].dt.strftime('%Y/%m/%d')
+        
+        # Save updated benchmark
+        updated_benchmark.to_csv("MIQP_piecewise_benchmark.csv", index=False)
+        
+        print(f"✓ Successfully processed {target_date}")
+        print(f"Expected profit: {metrics['ExpectedProfit']:.2f} €, Ex-post profit: {profit.item():.2f} €")
+        print(f"Updated benchmark CSV with {len(updated_benchmark)} total entries")
+        
+        # Also save detailed results for this date
+        detailed_results = []
+        for hour in range(T):
+            detailed_results.append({
+                'date': target_date,
+                'hour': hour,
+                'power': results['p'][hour],
+                'head': results['h'][hour],
+                'volume': results['v_low'][hour],
+                'flow': results['q'][hour],
+                'price': prices_24h[hour]
+            })
+        
+        # Load existing detailed results and append
+        try:
+            # Try different encodings to handle potential encoding issues
+            try:
+                existing_detailed = pd.read_csv("MIQP_piecewise_results.csv", encoding='utf-8')
+            except UnicodeDecodeError:
+                try:
+                    existing_detailed = pd.read_csv("MIQP_piecewise_results.csv", encoding='latin-1')
+                except UnicodeDecodeError:
+                    existing_detailed = pd.read_csv("MIQP_piecewise_results.csv", encoding='cp1252')
+            new_detailed_df = pd.DataFrame(detailed_results)
+            updated_detailed = pd.concat([existing_detailed, new_detailed_df], ignore_index=True)
+            updated_detailed.to_csv("MIQP_piecewise_results.csv", index=False)
+            print(f"Also updated detailed results CSV with {len(updated_detailed)} total rows")
+        except FileNotFoundError:
+            new_detailed_df = pd.DataFrame(detailed_results)
+            new_detailed_df.to_csv("MIQP_piecewise_results.csv", index=False)
+            print(f"Created new detailed results CSV with {len(new_detailed_df)} rows")
+        
+    except Exception as e:
+        print(f"Error processing {target_date}: {e}")
+        raise
+
+# Run the missing date
 if __name__ == "__main__":
-    run_piecewise_optimization()
+    rerun_missing_date()

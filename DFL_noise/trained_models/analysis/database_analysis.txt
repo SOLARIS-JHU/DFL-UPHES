@@ -1,0 +1,45 @@
+Multi-Noise Level Database Analysis Summary
+==========================================
+
+Noise levels processed: [0.1, 0.2, 0.3, 0.4, 0.5]
+Total configurations tested: 2000
+
+Best Configuration Overall:
+  Architecture: LSTM
+  Number of Layers: 3
+  Max Iterations: 16
+  Noise Level: 0.1
+  Date: 2024-12-12
+  Simulated Profit: 20452.29
+
+Statistics by Noise Level:
+  Noise 10%:
+    Configurations: 400
+    Average Simulated Profit: 4666.19
+    Best Simulated Profit: 20452.29
+    Average Training Time: 93.81s
+
+  Noise 20%:
+    Configurations: 400
+    Average Simulated Profit: 4662.06
+    Best Simulated Profit: 20452.10
+    Average Training Time: 90.52s
+
+  Noise 30%:
+    Configurations: 400
+    Average Simulated Profit: 4665.35
+    Best Simulated Profit: 20452.11
+    Average Training Time: 91.36s
+
+  Noise 40%:
+    Configurations: 400
+    Average Simulated Profit: 4663.83
+    Best Simulated Profit: 20452.29
+    Average Training Time: 86.55s
+
+  Noise 50%:
+    Configurations: 400
+    Average Simulated Profit: 4664.28
+    Best Simulated Profit: 20452.10
+    Average Training Time: 85.10s
+

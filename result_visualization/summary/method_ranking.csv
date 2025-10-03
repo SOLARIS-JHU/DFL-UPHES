@@ -1,8 +1,0 @@
-,Ex_post_Profit,Ex_post_Profit,Ex_post_Profit,Processing_Time_Seconds,Processing_Time_Seconds
-,mean,std,count,mean,std
-Method,,,,,
-MIQP_Piecewise,3805.8,1404.38,18,989.69,1497.23
-DFL_Bounded,3464.7,1457.13,19,1.15,0.03
-DFL_Unbounded,3461.25,1475.39,19,1.17,0.06
-MIQP_Linear,3409.11,1433.45,19,2.69,6.72
-MIQP_NN,1952.36,955.3,19,3386.63,674.1

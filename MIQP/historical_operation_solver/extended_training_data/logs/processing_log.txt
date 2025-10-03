@@ -1,0 +1,344 @@
+
+
+=== Processing started at 2025-09-04 09:37:16.858626 ===
+Starting from rank 2
+Will skip 19 dates already in training dataset
+
+--- Processing Rank 2 ---
+  2024-04-09 -> 2020-07-03: SUCCESS (Expected: 1258.88 €, Ex-post: 1082.81 €)
+  2024-07-09 -> 2021-06-20: SUCCESS (Expected: 2633.73 €, Ex-post: 2632.39 €)
+  2024-10-05 -> 2023-06-01: SUCCESS (Expected: 3711.25 €, Ex-post: 3711.53 €)
+  2024-01-30 -> 2021-06-09: SUCCESS (Expected: 2015.02 €, Ex-post: 1582.98 €)
+  2024-08-03 -> 2023-05-20: SUCCESS (Expected: 3879.21 €, Ex-post: 3877.60 €)
+  2024-07-19 -> 2023-06-02: SUCCESS (Expected: 2847.94 €, Ex-post: 2848.34 €)
+  2024-02-14 -> 2021-04-09: SUCCESS (Expected: 1845.24 €, Ex-post: 1845.24 €)
+  2024-11-21 -> 2023-11-17: SUCCESS (Expected: 3549.13 €, Ex-post: 2862.29 €)
+  2024-06-16 -> 2023-03-25: SUCCESS (Expected: 4738.52 €, Ex-post: 4735.83 €)
+  2024-01-09 -> 2023-12-14: SUCCESS (Expected: 3100.51 €, Ex-post: 2522.42 €)
+  2024-08-15 -> 2023-05-27: SUCCESS (Expected: 5391.30 €, Ex-post: 5388.55 €)
+  2024-04-24 -> 2023-05-23: SUCCESS (Expected: 3115.45 €, Ex-post: 3115.84 €)
+  2024-02-06 -> 2018-12-10: SUCCESS (Expected: 3270.68 €, Ex-post: 3245.14 €)
+  2024-07-04 -> 2019-04-22: SUCCESS (Expected: 2011.94 €, Ex-post: 2010.96 €)
+  2024-03-23 -> 2021-03-13: SUCCESS (Expected: 2073.23 €, Ex-post: 2072.12 €)
+  2024-12-13 -> 2022-11-14: SUCCESS (Expected: 7755.89 €, Ex-post: 6585.08 €)
+  2024-10-21 -> 2023-12-11: SUCCESS (Expected: 4937.09 €, Ex-post: 4937.58 €)
+  2024-08-05 -> 2023-10-01: SUCCESS (Expected: 6004.40 €, Ex-post: 5999.96 €)
+Rank 2 completed: 18 successful, 0 failed, 1 skipped (duplicates)
+
+--- Processing Rank 3 ---
+  2024-04-09 -> 2020-07-30: SUCCESS (Expected: 1589.50 €, Ex-post: 1589.06 €)
+  2024-07-09 -> 2021-08-14: SUCCESS (Expected: 3565.05 €, Ex-post: 3564.76 €)
+  2024-10-05 -> 2023-05-25: SUCCESS (Expected: 3812.49 €, Ex-post: 3813.17 €)
+  2024-01-30 -> 2021-06-08: SUCCESS (Expected: 2177.85 €, Ex-post: 1733.32 €)
+  2024-08-03 -> 2021-05-02: SUCCESS (Expected: 2653.98 €, Ex-post: 2653.22 €)
+  2024-07-19 -> 2023-05-01: SUCCESS (Expected: 3976.38 €, Ex-post: 3977.17 €)
+  2024-02-14 -> 2018-11-14: SUCCESS (Expected: 1814.60 €, Ex-post: 1447.24 €)
+  2024-11-21 -> 2023-12-05: SUCCESS (Expected: 3664.65 €, Ex-post: 2991.45 €)
+  2024-06-16 -> 2021-05-09: SUCCESS (Expected: 5321.32 €, Ex-post: 5318.91 €)
+  2024-01-09 -> 2023-11-09: SUCCESS (Expected: 3335.77 €, Ex-post: 2778.17 €)
+  2024-08-15 -> 2021-06-12: SUCCESS (Expected: 4412.07 €, Ex-post: 4410.15 €)
+  2024-08-09 -> 2023-07-15: SUCCESS (Expected: 3505.98 €, Ex-post: 3503.84 €)
+  2024-02-06 -> 2023-11-03: SUCCESS (Expected: 4203.29 €, Ex-post: 3836.40 €)
+  2024-07-04 -> 2019-08-10: SUCCESS (Expected: 1502.52 €, Ex-post: 1501.63 €)
+  2024-03-23 -> 2019-05-26: SUCCESS (Expected: 1284.63 €, Ex-post: 1282.36 €)
+  2024-12-13 -> 2022-11-15: SUCCESS (Expected: 7456.29 €, Ex-post: 6288.20 €)
+  2024-10-21 -> 2023-11-24: SUCCESS (Expected: 5131.58 €, Ex-post: 5098.33 €)
+  2024-08-05 -> 2023-08-13: SUCCESS (Expected: 5535.47 €, Ex-post: 5531.50 €)
+Rank 3 completed: 18 successful, 0 failed, 1 skipped (duplicates)
+
+--- Processing Rank 4 ---
+  2024-04-09 -> 2020-09-18: SUCCESS (Expected: 1493.21 €, Ex-post: 1292.55 €)
+  2024-07-09 -> 2023-04-01: SUCCESS (Expected: 2686.08 €, Ex-post: 2683.98 €)
+  2024-10-05 -> 2021-04-20: SUCCESS (Expected: 2789.17 €, Ex-post: 2393.91 €)
+  2024-01-30 -> 2021-06-10: SUCCESS (Expected: 2153.21 €, Ex-post: 1697.43 €)
+  2024-07-19 -> 2023-08-15: SUCCESS (Expected: 4030.72 €, Ex-post: 4031.20 €)
+  2024-02-14 -> 2021-05-12: SUCCESS (Expected: 1937.80 €, Ex-post: 1541.60 €)
+  2024-11-21 -> 2023-10-25: SUCCESS (Expected: 3835.61 €, Ex-post: 3138.77 €)
+  2024-06-16 -> 2021-05-23: SUCCESS (Expected: 3873.35 €, Ex-post: 3871.14 €)
+  2024-01-09 -> 2023-11-07: SUCCESS (Expected: 3568.20 €, Ex-post: 3568.84 €)
+  2024-04-24 -> 2023-05-30: SUCCESS (Expected: 3109.04 €, Ex-post: 3108.95 €)
+  2024-08-09 -> 2021-05-30: SUCCESS (Expected: 3502.40 €, Ex-post: 3500.33 €)
+  2024-02-06 -> 2016-11-28: SUCCESS (Expected: 2463.93 €, Ex-post: 2095.04 €)
+  2024-03-23 -> 2020-07-26: SUCCESS (Expected: 1437.77 €, Ex-post: 1436.87 €)
+  2024-12-13 -> 2021-11-03: SUCCESS (Expected: 6668.47 €, Ex-post: 5578.03 €)
+  2024-10-21 -> 2022-11-02: SUCCESS (Expected: 5278.17 €, Ex-post: 5265.03 €)
+Rank 4 completed: 15 successful, 0 failed, 4 skipped (duplicates)
+
+--- Processing Rank 5 ---
+  2024-04-09 -> 2020-09-12: SUCCESS (Expected: 1218.00 €, Ex-post: 1218.08 €)
+  2024-10-05 -> 2023-07-22: SUCCESS (Expected: 3687.53 €, Ex-post: 3688.27 €)
+  2024-01-30 -> 2021-06-15: SUCCESS (Expected: 2306.82 €, Ex-post: 1840.29 €)
+  2024-07-19 -> 2023-08-10: SUCCESS (Expected: 4094.40 €, Ex-post: 4094.92 €)
+  2024-02-14 -> 2018-08-06: SUCCESS (Expected: 2074.88 €, Ex-post: 1703.91 €)
+  2024-11-21 -> 2023-11-21: SUCCESS (Expected: 3842.92 €, Ex-post: 2373.19 €)
+  2024-01-09 -> 2021-08-12: SUCCESS (Expected: 3155.36 €, Ex-post: 2571.07 €)
+  2024-04-24 -> 2021-05-07: SUCCESS (Expected: 2401.08 €, Ex-post: 1988.49 €)
+  2024-08-09 -> 2021-06-13: SUCCESS (Expected: 5047.33 €, Ex-post: 5044.43 €)
+  2024-02-06 -> 2018-03-05: SUCCESS (Expected: 2223.11 €, Ex-post: 1879.73 €)
+  2024-07-04 -> 2020-05-23: SUCCESS (Expected: 1837.65 €, Ex-post: 1836.96 €)
+  2024-03-23 -> 2020-06-28: SUCCESS (Expected: 1167.67 €, Ex-post: 1166.72 €)
+  2024-12-13 -> 2022-11-16: SUCCESS (Expected: 8608.42 €, Ex-post: 7618.86 €)
+  2024-10-21 -> 2023-09-21: SUCCESS (Expected: 4760.87 €, Ex-post: 4209.35 €)
+  2024-08-05 -> 2023-07-05: SUCCESS (Expected: 4562.68 €, Ex-post: 4560.62 €)
+Rank 5 completed: 15 successful, 0 failed, 4 skipped (duplicates)
+
+--- Processing Rank 6 ---
+  2024-04-09 -> 2021-02-20: SUCCESS (Expected: 1136.68 €, Ex-post: 938.58 €)
+  2024-07-09 -> 2023-10-07: SUCCESS (Expected: 5445.58 €, Ex-post: 5442.18 €)
+  2024-01-30 -> 2021-06-18: SUCCESS (Expected: 2392.50 €, Ex-post: 1934.49 €)
+  2024-08-03 -> 2021-04-25: SUCCESS (Expected: 3189.04 €, Ex-post: 3187.21 €)
+  2024-07-19 -> 2023-07-08: SUCCESS (Expected: 4468.07 €, Ex-post: 4464.65 €)
+  2024-02-14 -> 2018-10-11: SUCCESS (Expected: 2074.13 €, Ex-post: 1693.21 €)
+  2024-11-21 -> 2023-10-24: SUCCESS (Expected: 3629.59 €, Ex-post: 2967.40 €)
+  2024-06-16 -> 2021-03-14: SUCCESS (Expected: 2219.29 €, Ex-post: 2217.58 €)
+  2024-01-09 -> 2021-07-07: SUCCESS (Expected: 2973.73 €, Ex-post: 2413.84 €)
+  2024-08-15 -> 2023-06-04: SUCCESS (Expected: 5559.77 €, Ex-post: 5556.28 €)
+  2024-08-09 -> 2023-08-06: SUCCESS (Expected: 3639.61 €, Ex-post: 3637.45 €)
+  2024-02-06 -> 2021-02-08: SUCCESS (Expected: 2911.40 €, Ex-post: 2597.02 €)
+  2024-07-04 -> 2021-03-28: SUCCESS (Expected: 3393.47 €, Ex-post: 3391.58 €)
+  2024-03-23 -> 2018-04-22: SUCCESS (Expected: 1107.60 €, Ex-post: 1106.82 €)
+  2024-12-13 -> 2022-11-04: SUCCESS (Expected: 6654.84 €, Ex-post: 5513.26 €)
+  2024-10-21 -> 2023-01-13: SUCCESS (Expected: 5574.86 €, Ex-post: 5530.52 €)
+  2024-08-05 -> 2023-07-03: SUCCESS (Expected: 6738.69 €, Ex-post: 6732.97 €)
+Rank 6 completed: 17 successful, 0 failed, 2 skipped (duplicates)
+
+--- Processing Rank 7 ---
+  2024-04-09 -> 2018-04-21: SUCCESS (Expected: 1695.21 €, Ex-post: 1482.03 €)
+  2024-07-09 -> 2023-05-31: SUCCESS (Expected: 4254.33 €, Ex-post: 4254.62 €)
+  2024-01-30 -> 2021-06-17: SUCCESS (Expected: 2431.66 €, Ex-post: 2001.02 €)
+  2024-08-03 -> 2021-04-24: SUCCESS (Expected: 2086.94 €, Ex-post: 1784.27 €)
+  2024-07-19 -> 2023-05-19: SUCCESS (Expected: 2847.28 €, Ex-post: 2404.96 €)
+  2024-02-14 -> 2021-06-02: SUCCESS (Expected: 1953.25 €, Ex-post: 1599.64 €)
+  2024-11-21 -> 2023-11-26: SUCCESS (Expected: 3289.24 €, Ex-post: 2632.28 €)
+  2024-01-09 -> 2023-11-22: SUCCESS (Expected: 3625.26 €, Ex-post: 2212.74 €)
+  2024-08-15 -> 2023-05-14: SUCCESS (Expected: 5883.27 €, Ex-post: 5880.10 €)
+  2024-04-24 -> 2023-05-16: SUCCESS (Expected: 3761.64 €, Ex-post: 3761.96 €)
+  2024-02-06 -> 2017-12-15: SUCCESS (Expected: 2519.21 €, Ex-post: 2155.53 €)
+  2024-07-04 -> 2020-04-20: SUCCESS (Expected: 1304.22 €, Ex-post: 1303.58 €)
+  2024-03-23 -> 2019-05-12: SUCCESS (Expected: 1606.62 €, Ex-post: 1606.26 €)
+  2024-12-13 -> 2022-11-23: SUCCESS (Expected: 7093.16 €, Ex-post: 5104.52 €)
+  2024-10-21 -> 2023-01-12: SUCCESS (Expected: 6173.73 €, Ex-post: 5599.16 €)
+  2024-08-05 -> 2023-07-17: SUCCESS (Expected: 4674.13 €, Ex-post: 4671.47 €)
+Rank 7 completed: 16 successful, 0 failed, 3 skipped (duplicates)
+
+--- Processing Rank 8 ---
+  2024-04-09 -> 2019-04-21: SUCCESS (Expected: 1301.21 €, Ex-post: 1132.51 €)
+  2024-10-05 -> 2023-03-30: SUCCESS (Expected: 4342.74 €, Ex-post: 3887.82 €)
+  2024-01-30 -> 2021-06-11: SUCCESS (Expected: 2123.95 €, Ex-post: 1686.96 €)
+  2024-08-03 -> 2021-05-29: SUCCESS (Expected: 2445.19 €, Ex-post: 2445.48 €)
+  2024-02-14 -> 2018-10-12: SUCCESS (Expected: 1780.96 €, Ex-post: 1780.96 €)
+  2024-11-21 -> 2023-12-02: SUCCESS (Expected: 3209.76 €, Ex-post: 2553.20 €)
+  2024-01-09 -> 2023-09-13: SUCCESS (Expected: 3168.39 €, Ex-post: 2616.74 €)
+  2024-08-15 -> 2023-05-26: SUCCESS (Expected: 4278.55 €, Ex-post: 4278.92 €)
+  2024-08-09 -> 2023-07-23: SUCCESS (Expected: 5010.13 €, Ex-post: 5007.00 €)
+  2024-02-06 -> 2017-10-30: SUCCESS (Expected: 2534.24 €, Ex-post: 2164.90 €)
+  2024-03-23 -> 2020-07-21: SUCCESS (Expected: 1429.04 €, Ex-post: 1429.20 €)
+  2024-12-13 -> 2023-12-01: SUCCESS (Expected: 7547.94 €, Ex-post: 6604.27 €)
+  2024-10-21 -> 2023-11-14: SUCCESS (Expected: 5178.33 €, Ex-post: 5178.58 €)
+Rank 8 completed: 13 successful, 0 failed, 6 skipped (duplicates)
+
+--- Processing Rank 9 ---
+  2024-04-09 -> 2018-04-29: SUCCESS (Expected: 1573.12 €, Ex-post: 1131.42 €)
+  2024-07-09 -> 2021-04-22: SUCCESS (Expected: 2607.13 €, Ex-post: 2607.47 €)
+  2024-01-30 -> 2021-06-07: SUCCESS (Expected: 2234.69 €, Ex-post: 1772.59 €)
+  2024-08-03 -> 2018-09-16: SUCCESS (Expected: 1774.40 €, Ex-post: 1774.43 €)
+  2024-02-14 -> 2016-12-06: SUCCESS (Expected: 2092.91 €, Ex-post: 1700.14 €)
+  2024-11-21 -> 2023-01-06: SUCCESS (Expected: 4673.63 €, Ex-post: 3857.76 €)
+  2024-01-09 -> 2021-08-20: SUCCESS (Expected: 2942.81 €, Ex-post: 2362.76 €)
+  2024-04-24 -> 2021-06-14: SUCCESS (Expected: 2392.76 €, Ex-post: 2392.76 €)
+  2024-02-06 -> 2020-08-31: SUCCESS (Expected: 2358.72 €, Ex-post: 2006.35 €)
+  2024-07-04 -> 2020-04-05: SUCCESS (Expected: 1159.50 €, Ex-post: 1158.85 €)
+  2024-03-23 -> 2019-06-30: SUCCESS (Expected: 1305.76 €, Ex-post: 1304.46 €)
+  2024-12-13 -> 2022-10-17: SUCCESS (Expected: 6837.77 €, Ex-post: 5914.25 €)
+  2024-10-21 -> 2023-10-11: SUCCESS (Expected: 6528.13 €, Ex-post: 6527.20 €)
+Rank 9 completed: 13 successful, 0 failed, 6 skipped (duplicates)
+
+--- Processing Rank 10 ---
+  2024-04-09 -> 2020-07-31: SUCCESS (Expected: 1327.25 €, Ex-post: 1327.25 €)
+  2024-01-30 -> 2021-05-19: SUCCESS (Expected: 2297.47 €, Ex-post: 1846.73 €)
+  2024-02-14 -> 2021-03-18: SUCCESS (Expected: 2069.63 €, Ex-post: 2069.21 €)
+  2024-11-21 -> 2023-12-06: SUCCESS (Expected: 4918.28 €, Ex-post: 4137.78 €)
+  2024-06-16 -> 2023-01-01: SUCCESS (Expected: 2770.84 €, Ex-post: 2769.13 €)
+  2024-04-24 -> 2021-05-18: SUCCESS (Expected: 2226.83 €, Ex-post: 1808.87 €)
+  2024-08-09 -> 2021-07-29: SUCCESS (Expected: 6561.23 €, Ex-post: 6557.54 €)
+  2024-02-06 -> 2016-01-19: SUCCESS (Expected: 2208.34 €, Ex-post: 1871.59 €)
+  2024-07-04 -> 2020-03-22: SUCCESS (Expected: 1867.10 €, Ex-post: 1866.33 €)
+  2024-03-23 -> 2020-08-23: SUCCESS (Expected: 1199.95 €, Ex-post: 1198.97 €)
+  2024-12-13 -> 2022-01-30: SUCCESS (Expected: 7366.44 €, Ex-post: 6090.52 €)
+  2024-10-21 -> 2023-10-30: SUCCESS (Expected: 6814.31 €, Ex-post: 6188.26 €)
+Rank 10 completed: 12 successful, 0 failed, 7 skipped (duplicates)
+
+--- Processing Rank 11 ---
+  2024-04-09 -> 2021-04-04: SUCCESS (Expected: 2038.12 €, Ex-post: 1722.84 €)
+  2024-07-09 -> 2023-03-24: SUCCESS (Expected: 3771.17 €, Ex-post: 3502.00 €)
+  2024-10-05 -> 2021-04-15: SUCCESS (Expected: 2588.30 €, Ex-post: 1918.00 €)
+  2024-01-30 -> 2018-11-16: SUCCESS (Expected: 2200.75 €, Ex-post: 2200.75 €)
+  2024-08-03 -> 2021-06-27: SUCCESS (Expected: 3054.47 €, Ex-post: 3052.86 €)
+  2024-07-19 -> 2023-06-08: SUCCESS (Expected: 2473.92 €, Ex-post: 2473.92 €)
+  2024-02-14 -> 2018-08-28: SUCCESS (Expected: 1917.01 €, Ex-post: 1502.47 €)
+  2024-11-21 -> 2023-11-28: SUCCESS (Expected: 5628.10 €, Ex-post: 4833.31 €)
+  2024-01-09 -> 2021-08-19: SUCCESS (Expected: 3660.83 €, Ex-post: 3062.85 €)
+  2024-08-15 -> 2023-06-10: SUCCESS (Expected: 3772.90 €, Ex-post: 3773.65 €)
+  2024-04-24 -> 2021-08-28: SUCCESS (Expected: 2517.03 €, Ex-post: 2517.03 €)
+  2024-02-06 -> 2015-11-26: SUCCESS (Expected: 2454.29 €, Ex-post: 2086.82 €)
+  2024-07-04 -> 2020-05-31: SUCCESS (Expected: 1212.36 €, Ex-post: 1211.79 €)
+  2024-03-23 -> 2018-05-20: SUCCESS (Expected: 1337.87 €, Ex-post: 1337.19 €)
+  2024-12-13 -> 2023-01-17: SUCCESS (Expected: 7419.14 €, Ex-post: 6251.12 €)
+  2024-10-21 -> 2022-11-08: SUCCESS (Expected: 5490.60 €, Ex-post: 5491.31 €)
+Rank 11 completed: 16 successful, 0 failed, 3 skipped (duplicates)
+
+--- Processing Rank 12 ---
+  2024-04-09 -> 2017-03-27: SUCCESS (Expected: 1068.12 €, Ex-post: 885.35 €)
+  2024-07-09 -> 2021-07-25: SUCCESS (Expected: 2354.71 €, Ex-post: 2351.80 €)
+  2024-01-30 -> 2021-06-26: SUCCESS (Expected: 2109.89 €, Ex-post: 1685.90 €)
+  2024-08-03 -> 2018-10-14: SUCCESS (Expected: 2511.80 €, Ex-post: 2510.53 €)
+  2024-02-14 -> 2018-09-03: SUCCESS (Expected: 1877.24 €, Ex-post: 1492.90 €)
+  2024-11-21 -> 2023-02-17: SUCCESS (Expected: 4061.77 €, Ex-post: 3352.40 €)
+  2024-06-16 -> 2019-08-11: SUCCESS (Expected: 1963.48 €, Ex-post: 1962.06 €)
+  2024-08-15 -> 2023-06-11: SUCCESS (Expected: 5559.58 €, Ex-post: 5555.67 €)
+  2024-04-24 -> 2023-07-14: SUCCESS (Expected: 2761.28 €, Ex-post: 2303.42 €)
+  2024-02-06 -> 2015-03-02: SUCCESS (Expected: 2310.08 €, Ex-post: 2310.33 €)
+  2024-07-04 -> 2020-03-29: SUCCESS (Expected: 1498.08 €, Ex-post: 1497.40 €)
+  2024-03-23 -> 2020-08-22: SUCCESS (Expected: 1074.17 €, Ex-post: 1074.19 €)
+  2024-12-13 -> 2023-01-20: SUCCESS (Expected: 5706.10 €, Ex-post: 3516.48 €)
+  2024-10-21 -> 2023-10-20: SUCCESS (Expected: 5293.31 €, Ex-post: 4677.13 €)
+  2024-08-05 -> 2023-04-02: SUCCESS (Expected: 4682.23 €, Ex-post: 4677.78 €)
+Rank 12 completed: 15 successful, 0 failed, 4 skipped (duplicates)
+
+--- Processing Rank 13 ---
+  2024-04-09 -> 2020-07-20: SUCCESS (Expected: 1187.67 €, Ex-post: 1187.74 €)
+  2024-07-09 -> 2021-05-10: SUCCESS (Expected: 2455.87 €, Ex-post: 2456.20 €)
+  2024-10-05 -> 2021-04-23: SUCCESS (Expected: 2248.51 €, Ex-post: 2248.70 €)
+  2024-01-30 -> 2021-07-24: SUCCESS (Expected: 2097.64 €, Ex-post: 1685.64 €)
+  2024-08-03 -> 2021-03-26: SUCCESS (Expected: 1921.64 €, Ex-post: 1645.53 €)
+  2024-07-19 -> 2023-06-05: SUCCESS (Expected: 2606.29 €, Ex-post: 2166.08 €)
+  2024-02-14 -> 2018-10-20: SUCCESS (Expected: 1604.94 €, Ex-post: 1604.94 €)
+  2024-11-21 -> 2023-10-26: SUCCESS (Expected: 3850.69 €, Ex-post: 3160.23 €)
+  2024-06-16 -> 2021-03-27: SUCCESS (Expected: 3776.46 €, Ex-post: 3774.07 €)
+  2024-01-09 -> 2021-08-04: SUCCESS (Expected: 2874.10 €, Ex-post: 2324.68 €)
+  2024-08-15 -> 2023-04-10: SUCCESS (Expected: 4276.58 €, Ex-post: 3956.48 €)
+  2024-04-24 -> 2021-05-27: SUCCESS (Expected: 2321.78 €, Ex-post: 1890.75 €)
+  2024-02-06 -> 2021-01-22: SUCCESS (Expected: 2125.21 €, Ex-post: 1797.61 €)
+  2024-07-04 -> 2019-03-17: SUCCESS (Expected: 1547.22 €, Ex-post: 1546.08 €)
+  2024-03-23 -> 2016-08-07: SUCCESS (Expected: 775.78 €, Ex-post: 775.10 €)
+  2024-12-13 -> 2022-12-23: SUCCESS (Expected: 6438.08 €, Ex-post: 4292.52 €)
+  2024-10-21 -> 2023-10-19: SUCCESS (Expected: 6592.43 €, Ex-post: 5880.82 €)
+Rank 13 completed: 17 successful, 0 failed, 2 skipped (duplicates)
+
+--- Processing Rank 14 ---
+  2024-04-09 -> 2019-07-30: SUCCESS (Expected: 1334.05 €, Ex-post: 1333.71 €)
+  2024-10-05 -> 2021-04-14: SUCCESS (Expected: 2854.88 €, Ex-post: 2853.51 €)
+  2024-01-30 -> 2021-08-22: SUCCESS (Expected: 2085.27 €, Ex-post: 2085.27 €)
+  2024-08-03 -> 2021-08-01: SUCCESS (Expected: 2831.86 €, Ex-post: 2829.24 €)
+  2024-07-19 -> 2023-05-06: SUCCESS (Expected: 3101.22 €, Ex-post: 3101.54 €)
+  2024-02-14 -> 2018-09-04: SUCCESS (Expected: 1991.27 €, Ex-post: 1585.58 €)
+  2024-11-21 -> 2022-10-22: SUCCESS (Expected: 4091.73 €, Ex-post: 3455.88 €)
+  2024-06-16 -> 2017-07-30: SUCCESS (Expected: 2074.32 €, Ex-post: 2073.13 €)
+  2024-01-09 -> 2023-12-03: SUCCESS (Expected: 2836.73 €, Ex-post: 2272.70 €)
+  2024-02-06 -> 2016-11-16: FAILED
+  2024-03-23 -> 2018-04-08: FAILED
+  2024-12-13 -> 2022-02-08: FAILED
+  2024-10-21 -> 2017-11-17: FAILED
+Rank 14 completed: 9 successful, 4 failed, 6 skipped (duplicates)
+
+--- Processing Rank 15 ---
+  2024-04-09 -> 2018-04-06: FAILED
+  2024-01-30 -> 2021-07-10: FAILED
+  2024-08-03 -> 2018-08-12: FAILED
+  2024-07-19 -> 2023-09-16: FAILED
+  2024-02-14 -> 2021-06-01: FAILED
+  2024-11-21 -> 2022-10-30: FAILED
+  2024-01-09 -> 2023-12-08: FAILED
+  2024-04-24 -> 2021-05-28: FAILED
+  2024-08-09 -> 2021-03-29: FAILED
+  2024-02-06 -> 2023-12-10: FAILED
+  2024-03-23 -> 2020-07-12: FAILED
+  2024-12-13 -> 2023-01-25: FAILED
+  2024-10-21 -> 2022-01-03: FAILED
+Rank 15 completed: 0 successful, 13 failed, 6 skipped (duplicates)
+
+--- Processing Rank 16 ---
+  2024-04-09 -> 2019-09-18: FAILED
+  2024-07-09 -> 2021-08-09: FAILED
+  2024-07-19 -> 2023-07-09: FAILED
+  2024-02-14 -> 2018-10-19: FAILED
+  2024-11-21 -> 2023-10-31: FAILED
+  2024-06-16 -> 2021-08-06: FAILED
+  2024-01-09 -> 2023-11-11: FAILED
+  2024-02-06 -> 2019-02-11: FAILED
+  2024-07-04 -> 2020-05-17: FAILED
+  2024-03-23 -> 2017-03-05: FAILED
+  2024-12-13 -> 2023-02-07: FAILED
+  2024-10-21 -> 2017-11-15: FAILED
+Rank 16 completed: 0 successful, 12 failed, 7 skipped (duplicates)
+
+--- Processing Rank 17 ---
+  2024-04-09 -> 2019-03-31: FAILED
+  2024-10-05 -> 2023-07-29: FAILED
+  2024-07-19 -> 2023-08-14: FAILED
+  2024-02-14 -> 2018-11-06: FAILED
+  2024-11-21 -> 2023-12-04: FAILED
+  2024-01-09 -> 2023-08-18: FAILED
+  2024-04-24 -> 2021-04-13: FAILED
+  2024-08-09 -> 2021-08-06: FAILED
+  2024-02-06 -> 2017-12-18: FAILED
+  2024-03-23 -> 2019-05-30: FAILED
+  2024-12-13 -> 2021-11-11: FAILED
+  2024-10-21 -> 2023-04-11: FAILED
+Rank 17 completed: 0 successful, 12 failed, 7 skipped (duplicates)
+
+--- Processing Rank 18 ---
+  2024-04-09 -> 2020-07-23: FAILED
+  2024-07-09 -> 2021-05-05: FAILED
+  2024-10-05 -> 2021-04-19: FAILED
+  2024-01-30 -> 2023-12-19: FAILED
+  2024-08-03 -> 2021-08-15: FAILED
+  2024-07-19 -> 2023-05-17: FAILED
+  2024-02-14 -> 2018-10-05: FAILED
+  2024-11-21 -> 2023-02-19: FAILED
+  2024-01-09 -> 2021-08-30: FAILED
+  2024-02-06 -> 2016-12-12: FAILED
+  2024-07-04 -> 2020-04-22: FAILED
+  2024-03-23 -> 2020-04-15: FAILED
+  2024-12-13 -> 2023-01-27: FAILED
+  2024-10-21 -> 2022-11-07: FAILED
+  2024-08-05 -> 2023-09-03: FAILED
+Rank 18 completed: 0 successful, 15 failed, 4 skipped (duplicates)
+
+--- Processing Rank 19 ---
+  2024-04-09 -> 2020-07-22: FAILED
+  2024-07-09 -> 2023-08-03: FAILED
+  2024-10-05 -> 2021-04-29: FAILED
+  2024-01-30 -> 2021-06-04: FAILED
+  2024-08-03 -> 2017-11-19: FAILED
+  2024-07-19 -> 2023-06-09: FAILED
+  2024-02-14 -> 2021-06-05: FAILED
+  2024-11-21 -> 2023-03-10: FAILED
+  2024-01-09 -> 2023-12-07: FAILED
+  2024-08-15 -> 2021-05-05: FAILED
+  2024-08-09 -> 2021-05-16: FAILED
+  2024-02-06 -> 2017-11-23: FAILED
+  2024-07-04 -> 2020-07-05: FAILED
+  2024-03-23 -> 2017-06-04: FAILED
+  2024-12-13 -> 2023-02-06: FAILED
+  2024-10-21 -> 2016-10-24: FAILED
+  2024-08-05 -> 2023-04-23: FAILED
+Rank 19 completed: 0 successful, 17 failed, 2 skipped (duplicates)
+
+--- Processing Rank 20 ---
+  2024-04-09 -> 2020-09-03: FAILED
+  2024-07-09 -> 2023-10-21: FAILED
+  2024-10-05 -> 2021-04-13: FAILED
+  2024-01-30 -> 2018-10-16: FAILED
+  2024-08-03 -> 2021-03-29: FAILED
+  2024-02-14 -> 2018-11-15: FAILED
+  2024-11-21 -> 2022-10-27: FAILED
+  2024-06-16 -> 2023-10-29: FAILED
+  2024-01-09 -> 2023-05-10: FAILED
+  2024-04-24 -> 2021-05-14: FAILED
+  2024-08-09 -> 2021-05-04: FAILED
+  2024-02-06 -> 2016-01-21: FAILED
+  2024-03-23 -> 2017-03-12: FAILED
+  2024-12-13 -> 2022-12-22: FAILED
+  2024-10-21 -> 2023-11-10: FAILED
+Rank 20 completed: 0 successful, 15 failed, 4 skipped (duplicates)

@@ -296,6 +296,7 @@ class SimulationLayer:
             h_current = h[i]
             p_current = p[i]
             q_candidate = torch.zeros_like(p_current)
+            p_clamped = p_current
 
             if p_current > 0.5:  # Turbine mode
                 p_min_turb = self.params.pos_min(h_current)

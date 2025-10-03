@@ -1,0 +1,11 @@
+Ablation Study Summary (No LSTM - Fixed Weights)
+================================================
+
+Total configurations: 5
+Weight configs tested: ['low']
+Iteration range: 1-5
+
+Best Configuration:
+  Weight Config: low
+  Max Iterations: 1
+  Average Ex-post Profit: 4648.26
