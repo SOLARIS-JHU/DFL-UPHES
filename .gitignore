@@ -169,3 +169,21 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+# === Project outputs / figures / large binaries ===
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.tif
+*.tiff
+*.bmp
+*.svg
+*.pdf
+
+*.npy
+*.npz
+*.pt
+*.pth
+*.ckpt
+*.onnx
