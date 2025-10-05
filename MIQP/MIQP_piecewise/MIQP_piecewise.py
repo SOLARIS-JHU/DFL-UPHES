@@ -346,314 +346,6 @@ class PiecewiseMILPOptimizerSOS2:
                         print(f"{c.ConstrName}: {c}")
             return None, metrics
 
-# %% Piecewise MILP Optimizer with Big-M quadratic constraints
-class PiecewiseMILPOptimizer:
-    def __init__(self, T, DA_prices, num_segments_h=5, num_segments_p_pump=5, num_segments_p_turbine=5, 
-                 C_op=0.4, M_p=10000, h_init=head_init, h_min=head_min, h_max=head_max, 
-                 v_low_init=v_low_init, v_low_target=target_vol_low):
-        """
-        MILP optimizer with piecewise linearization for nonlinear functions.
-        
-        Parameters:
-            T (int): Number of time periods.
-            DA_prices (list): Day-ahead prices for each period.
-            num_segments_h (int): Number of segments for head discretization.
-            num_segments_p_pump (int): Number of segments for pump power discretization.
-            num_segments_p_turbine (int): Number of segments for turbine power discretization.
-            C_op (float): Operational cost coefficient.
-            M_p (float): Big-M constant.
-            h_init (float): Initial head.
-            h_min (float): Minimum head.
-            h_max (float): Maximum head.
-            v_low_init (float): Initial lower reservoir volume.
-            v_low_target (float): Target lower reservoir volume.
-        """
-        self.T = T
-        self.DA_prices = DA_prices
-        self.num_segments_h = num_segments_h
-        self.num_segments_p_pump = num_segments_p_pump
-        self.num_segments_p_turbine = num_segments_p_turbine
-        self.C_op = C_op
-        self.M_p = M_p
-        self.h_min = h_min
-        self.h_max = h_max
-        self.v_low_init = v_low_init
-        self.v_low_target = v_low_target
-        self.h_init = h_init
-        
-        # Sample the nonlinear functions
-        self._sample_functions()
-        
-        # Create model
-        self.model = gp.Model("PipelinePiecewiseMILP")
-        
-        # Build the model
-        self._build_model()
-    
-    def _sample_functions(self):
-        """Sample the nonlinear functions at grid points."""
-        # Sample head values
-        self.h_samples = np.linspace(self.h_min, self.h_max, self.num_segments_h + 1)
-        
-        # Sample volume-head relationship
-        self.v_low_samples = []
-        for h in self.h_samples:
-            v_low = h_to_v_low_fitted(torch.tensor(h)).item()
-            self.v_low_samples.append(v_low)
-        
-        # Sample UPC for pump mode (p < 0)
-        self.pump_grid = {}
-        for i, h in enumerate(self.h_samples):
-            # Get power bounds for this head value
-            p_min = neg_min(h).item()
-            p_max = neg_max(h).item()
-            # Sample power values within these bounds
-            p_values = np.linspace(p_min, p_max, self.num_segments_p_pump + 1)
-            q_values = []
-            for p in p_values:
-                q = predict_q_poly(p, h).item()
-                q_values.append(q)
-            self.pump_grid[i] = {'p': p_values, 'q': q_values}
-        
-        # Sample UPC for turbine mode (p > 0)
-        self.turbine_grid = {}
-        for i, h in enumerate(self.h_samples):
-            # Get power bounds for this head value
-            p_min = pos_min(h).item()
-            p_max = pos_max(h).item()
-            # Sample power values within these bounds
-            p_values = np.linspace(p_min, p_max, self.num_segments_p_turbine + 1)
-            q_values = []
-            for p in p_values:
-                q = predict_q_poly(p, h).item()
-                q_values.append(q)
-            self.turbine_grid[i] = {'p': p_values, 'q': q_values}
-    
-    def _build_model(self):
-        """Build the MILP model with piecewise linearization."""
-        T = self.T
-        M_p = self.M_p  # Big-M constant
-        
-        # Decision Variables
-        # Mode selection variables
-        self.z_I = self.model.addVars(T, vtype=GRB.BINARY, name="z_I")  # Idle
-        self.z_T = self.model.addVars(T, vtype=GRB.BINARY, name="z_T")  # Turbine
-        self.z_P = self.model.addVars(T, vtype=GRB.BINARY, name="z_P")  # Pump
-        
-        # Physical variables
-        self.p = self.model.addVars(T, lb=-GRB.INFINITY, name="p")  # Net power
-        self.h = self.model.addVars(T, lb=self.h_min, ub=self.h_max, name="h")  # Head
-        self.q = self.model.addVars(T, lb=-GRB.INFINITY, name="q")  # Net flow
-        self.v_low = self.model.addVars(T, name="v_low")  # Lower reservoir volume
-        
-        # Variables for volume-head piecewise linearization
-        self.lambda_vh = {}
-        for t in range(T):
-            for i in range(self.num_segments_h + 1):
-                self.lambda_vh[t, i] = self.model.addVar(lb=0, ub=1, name=f"lambda_vh_{t}_{i}")
-        
-        # Binary variables for UPC segment selection
-        self.delta_pump = {}
-        self.delta_turbine = {}
-        for t in range(T):
-            for i in range(self.num_segments_h):
-                for j in range(self.num_segments_p_pump):
-                    self.delta_pump[t, i, j] = self.model.addVar(vtype=GRB.BINARY, name=f"delta_pump_{t}_{i}_{j}")
-            for i in range(self.num_segments_h):
-                for j in range(self.num_segments_p_turbine):
-                    self.delta_turbine[t, i, j] = self.model.addVar(vtype=GRB.BINARY, name=f"delta_turbine_{t}_{i}_{j}")
-        
-        # Weights for bilinear interpolation within quadrilaterals
-        self.lambda_pump = {}
-        self.lambda_turbine = {}
-        for t in range(T):
-            for i in range(self.num_segments_h):
-                for j in range(self.num_segments_p_pump):
-                    for c in range(4):  # 4 corners
-                        self.lambda_pump[t, i, j, c] = self.model.addVar(lb=0, ub=1, name=f"lambda_pump_{t}_{i}_{j}_{c}")
-            for i in range(self.num_segments_h):
-                for j in range(self.num_segments_p_turbine):
-                    for c in range(4):  # 4 corners
-                        self.lambda_turbine[t, i, j, c] = self.model.addVar(lb=0, ub=1, name=f"lambda_turbine_{t}_{i}_{j}_{c}")
-        
-        # Mode selection constraints
-        for t in range(T):
-            self.model.addConstr(self.z_I[t] + self.z_T[t] + self.z_P[t] == 1, name=f"mode_sel_{t}")
-        
-        # Volume-head relationship constraints (1D piecewise linear)
-        for t in range(T):
-            # Convex combination constraint
-            self.model.addConstr(gp.quicksum(self.lambda_vh[t, i] for i in range(self.num_segments_h + 1)) == 1, name=f"vh_lambda_sum_{t}")
-            
-            # Interpolation for h and v_low
-            self.model.addConstr(self.h[t] == gp.quicksum(self.lambda_vh[t, i] * self.h_samples[i] for i in range(self.num_segments_h + 1)), name=f"h_interp_{t}")
-            self.model.addConstr(self.v_low[t] == gp.quicksum(self.lambda_vh[t, i] * self.v_low_samples[i] for i in range(self.num_segments_h + 1)), name=f"v_low_interp_{t}")
-            
-            # Special ordered set type 2 (SOS2) for piecewise linear interpolation
-            self.model.addSOS(GRB.SOS_TYPE2, [self.lambda_vh[t, i] for i in range(self.num_segments_h + 1)])
-        
-        # UPC constraints
-        for t in range(T):
-            # Idle mode constraints: p = 0, q = 0
-            self.model.addConstr(self.p[t] <= M_p * (1 - self.z_I[t]), name=f"idle_p_upper_{t}")
-            self.model.addConstr(self.p[t] >= -M_p * (1 - self.z_I[t]), name=f"idle_p_lower_{t}")
-            self.model.addConstr(self.q[t] <= M_p * (1 - self.z_I[t]), name=f"idle_q_upper_{t}")
-            self.model.addConstr(self.q[t] >= -M_p * (1 - self.z_I[t]), name=f"idle_q_lower_{t}")
-            
-            # Pump mode constraints
-            # Only one quadrilateral can be active in pump mode
-            self.model.addConstr(gp.quicksum(self.delta_pump[t, i, j] for i in range(self.num_segments_h) 
-                                          for j in range(self.num_segments_p_pump)) == self.z_P[t], 
-                              name=f"pump_segment_sel_{t}")
-            
-            # Interpolation within quadrilateral in pump mode
-            pump_p_expr = gp.LinExpr()
-            pump_q_expr = gp.LinExpr()
-            
-            for i in range(self.num_segments_h):
-                for j in range(self.num_segments_p_pump):
-                    # Define the 4 corners of the quadrilateral
-                    h_lower = self.h_samples[i]
-                    h_upper = self.h_samples[i+1]
-                    p_lower = self.pump_grid[i]['p'][j]
-                    p_upper = self.pump_grid[i]['p'][j+1]
-                    
-                    # Corner points (h, p, q) in counter-clockwise order
-                    corners_h = [h_lower, h_lower, h_upper, h_upper]
-                    corners_p = [p_lower, p_upper, p_upper, p_lower]
-                    corners_q = [
-                        self.pump_grid[i]['q'][j],      # bottom-left
-                        self.pump_grid[i]['q'][j+1],    # bottom-right
-                        self.pump_grid[i+1]['q'][j+1],  # top-right
-                        self.pump_grid[i+1]['q'][j]     # top-left
-                    ]
-                    
-                    # Convex combination constraint for the active quadrilateral
-                    self.model.addConstr(gp.quicksum(self.lambda_pump[t, i, j, c] for c in range(4)) == self.delta_pump[t, i, j], 
-                                      name=f"pump_lambda_sum_{t}_{i}_{j}")
-                    
-                    # Contribute to total expressions
-                    for c in range(4):
-                        pump_p_expr.add(self.lambda_pump[t, i, j, c] * corners_p[c])
-                        pump_q_expr.add(self.lambda_pump[t, i, j, c] * corners_q[c])
-                    
-                    # Big-M constraints to enforce that p and h are within quadrilateral boundaries when active
-                    # Lower bounds
-                    self.model.addConstr(self.h[t] >= h_lower - M_p * (1 - self.delta_pump[t, i, j]), 
-                                      name=f"pump_h_lower_{t}_{i}_{j}")
-                    self.model.addConstr(self.p[t] >= p_lower - M_p * (1 - self.delta_pump[t, i, j]), 
-                                      name=f"pump_p_lower_{t}_{i}_{j}")
-                    # Upper bounds
-                    self.model.addConstr(self.h[t] <= h_upper + M_p * (1 - self.delta_pump[t, i, j]), 
-                                      name=f"pump_h_upper_{t}_{i}_{j}")
-                    self.model.addConstr(self.p[t] <= p_upper + M_p * (1 - self.delta_pump[t, i, j]), 
-                                      name=f"pump_p_upper_{t}_{i}_{j}")
-            
-            # Turbine mode constraints
-            # Only one quadrilateral can be active in turbine mode
-            self.model.addConstr(gp.quicksum(self.delta_turbine[t, i, j] for i in range(self.num_segments_h) 
-                                          for j in range(self.num_segments_p_turbine)) == self.z_T[t], 
-                              name=f"turbine_segment_sel_{t}")
-            
-            # Interpolation within quadrilateral in turbine mode
-            turbine_p_expr = gp.LinExpr()
-            turbine_q_expr = gp.LinExpr()
-            
-            for i in range(self.num_segments_h):
-                for j in range(self.num_segments_p_turbine):
-                    # Define the 4 corners of the quadrilateral
-                    h_lower = self.h_samples[i]
-                    h_upper = self.h_samples[i+1]
-                    p_lower = self.turbine_grid[i]['p'][j]
-                    p_upper = self.turbine_grid[i]['p'][j+1]
-                    
-                    # Corner points (h, p, q) in counter-clockwise order
-                    corners_h = [h_lower, h_lower, h_upper, h_upper]
-                    corners_p = [p_lower, p_upper, p_upper, p_lower]
-                    corners_q = [
-                        self.turbine_grid[i]['q'][j],      # bottom-left
-                        self.turbine_grid[i]['q'][j+1],    # bottom-right
-                        self.turbine_grid[i+1]['q'][j+1],  # top-right
-                        self.turbine_grid[i+1]['q'][j]     # top-left
-                    ]
-                    
-                    # Convex combination constraint for the active quadrilateral
-                    self.model.addConstr(gp.quicksum(self.lambda_turbine[t, i, j, c] for c in range(4)) == self.delta_turbine[t, i, j], 
-                                      name=f"turbine_lambda_sum_{t}_{i}_{j}")
-                    
-                    # Contribute to total expressions
-                    for c in range(4):
-                        turbine_p_expr.add(self.lambda_turbine[t, i, j, c] * corners_p[c])
-                        turbine_q_expr.add(self.lambda_turbine[t, i, j, c] * corners_q[c])
-                    
-                    # Big-M constraints to enforce that p and h are within quadrilateral boundaries when active
-                    # Lower bounds
-                    self.model.addConstr(self.h[t] >= h_lower - M_p * (1 - self.delta_turbine[t, i, j]), 
-                                      name=f"turbine_h_lower_{t}_{i}_{j}")
-                    self.model.addConstr(self.p[t] >= p_lower - M_p * (1 - self.delta_turbine[t, i, j]), 
-                                      name=f"turbine_p_lower_{t}_{i}_{j}")
-                    # Upper bounds
-                    self.model.addConstr(self.h[t] <= h_upper + M_p * (1 - self.delta_turbine[t, i, j]), 
-                                      name=f"turbine_h_upper_{t}_{i}_{j}")
-                    self.model.addConstr(self.p[t] <= p_upper + M_p * (1 - self.delta_turbine[t, i, j]), 
-                                      name=f"turbine_p_upper_{t}_{i}_{j}")
-            
-            # Combine pump and turbine expressions
-            self.model.addConstr(self.p[t] == pump_p_expr + turbine_p_expr, name=f"p_combined_{t}")
-            self.model.addConstr(self.q[t] == pump_q_expr + turbine_q_expr, name=f"q_combined_{t}")
-        
-        # Volume dynamics
-        for t in range(T):
-            if t == 0:
-                self.model.addConstr(self.v_low[t] == self.v_low_init + 3600 * self.q[t], name=f"vol_dyn_{t}")
-            else:
-                self.model.addConstr(self.v_low[t] == self.v_low[t-1] + 3600 * self.q[t], name=f"vol_dyn_{t}")
-        
-        # Target volume constraint
-        self.model.addConstr(self.v_low[T-1] <= self.v_low_target, name="vol_target")
-        
-        # Objective function: maximize profit
-        objective = gp.quicksum(
-            self.p[t] * self.DA_prices[t] - self.C_op * self.p[t] * self.p[t]
-            for t in range(T)
-        )
-        self.model.setObjective(objective, GRB.MAXIMIZE)
-    
-    def solve(self):
-        """Optimize the MILP and return the decision variables."""
-        # Set some solver parameters for better performance
-        self.model.Params.MIPGap = 0.01  # 1% optimality gap
-        self.model.Params.TimeLimit = 3600  # 60 minute time limit
-
-        
-        self.model.optimize()
-        
-        if self.model.status == GRB.OPTIMAL or self.model.status == GRB.TIME_LIMIT:
-            if self.model.status == GRB.TIME_LIMIT:
-                print(f"Optimization reached time limit with MIP gap: {self.model.MIPGap:.2%}")
-                
-            results = {
-                'p': [self.p[t].X for t in range(self.T)],
-                'q': [self.q[t].X for t in range(self.T)],
-                'h': [self.h[t].X for t in range(self.T)],
-                'v_low': [self.v_low[t].X for t in range(self.T)],
-                'z_I': [self.z_I[t].X for t in range(self.T)],
-                'z_T': [self.z_T[t].X for t in range(self.T)],
-                'z_P': [self.z_P[t].X for t in range(self.T)]
-            }
-            return results
-        else:
-            print(f"Optimization failed with status {self.model.status}")
-            # Try to identify infeasibility causes
-            if self.model.status == GRB.INFEASIBLE:
-                print("Model is infeasible. Computing IIS...")
-                self.model.computeIIS()
-                print("\nConstraints in the IIS:")
-                for c in self.model.getConstrs():
-                    if c.IISConstr:
-                        print(f"{c.ConstrName}: {c}")
-            return None
-
 # %% Simulation Layer Classes (same as MIQP_nn.py)
 class HydroParameters:
     def __init__(
@@ -701,56 +393,88 @@ class SimulationLayer:
         self.params = params
 
     def simulate_operation(self, p, q, h):
-        """Simulate hourly operation with physical constraints."""
+        """
+        Simulate hourly operation with physical constraints.
+        
+        Args:
+            p (torch.Tensor): Hourly power schedule [time_horizon]
+            q (torch.Tensor): Hourly flow schedule [time_horizon] (not directly used, recalculated)
+            h (torch.Tensor): Hourly head schedule [time_horizon] (from optimization, for reference)
+        
+        Returns:
+            tuple: Calibrated hourly (p, q, h, v_low) schedules.
+        """
         TH = self.params.time_horizon
+        
+        # Initialize lists for each state
         p_list = []
         q_list = []
         h_list = []
         v_list = []
 
-        v_current = self.params.v_low_init
+        # Start states - use initial conditions
+        v_current = self.params.v_low_init  # Initial reservoir volume
+        h_current = self.params.head_init   # Initial head value
+        
         v_list.append(v_current)
+        h_list.append(h_current)  # Store initial head
 
         for i in range(TH):
-            h_current = h[i]
             p_current = p[i]
+            
+            # a) Base: idle => q=0
             q_candidate = torch.zeros_like(p_current)
             p_clamped = p_current
 
+            # b) For turbine mode (p_current>0), clamp p between pos_min(h) and pos_max(h)
+            #    then get q via polynomial using CURRENT head (not optimized head)
             if p_current > 0.5:  # Turbine mode
-                p_min_turb = self.params.pos_min(h_current)
-                p_max_turb = self.params.pos_max(h_current)
+                p_min_turb = self.params.pos_min(h_current)  # Use current head
+                p_max_turb = self.params.pos_max(h_current)  # Use current head
                 p_clamped = torch.clamp(p_current, min=p_min_turb, max=p_max_turb)
                 q_candidate = self.params.predict_q_poly(p_clamped.unsqueeze(0), h_current.unsqueeze(0)).squeeze(0)
+            
+            # c) For pump mode (p_current<0), clamp p between neg_min(h) and neg_max(h)
             elif p_current < -0.5:  # Pump mode
-                p_min_pump = self.params.neg_min(h_current)
-                p_max_pump = self.params.neg_max(h_current)
+                p_min_pump = self.params.neg_min(h_current)  # Use current head
+                p_max_pump = self.params.neg_max(h_current)  # Use current head
                 p_clamped = torch.clamp(p_current, min=p_min_pump, max=p_max_pump)
                 q_candidate = self.params.predict_q_poly(p_clamped.unsqueeze(0), h_current.unsqueeze(0)).squeeze(0)
-
+            
+            # Update volume: v_next = v_current + q * 3600 (seconds in an hour)
             v_next = v_current + q_candidate * 3600
+            
+            # Check if volume is within bounds
             out_of_bounds = (v_next > self.params.max_vol_up) | (v_next < self.params.min_vol_low)
-
+            
+            # If out of bounds, set to idle mode
             if out_of_bounds:
                 p_final = torch.zeros_like(p_current)
                 q_final = torch.zeros_like(q_candidate)
-                v_next = v_current
-                h_next = h_current
+                v_next = v_current  # No change to volume
+                h_next = h_current  # No change to head
             else:
                 p_final = p_clamped if p_current != 0 else torch.zeros_like(p_current)
                 q_final = q_candidate
+                # Update head based on new volume
                 h_next = self.params.v_low_to_h_fitted(v_next)
-
+            
+            # Append states for this hour
             p_list.append(p_final)
             q_list.append(q_final)
-            h_list.append(h_next)
-            v_list.append(v_next.item())
+            
+            # Update current states for next iteration
             v_current = v_next
-
+            h_current = h_next  # Important: update h_current for next iteration
+            
+            v_list.append(v_current.item())
+            h_list.append(h_current)
+        
+        # Convert lists to tensors
         p_sim = torch.stack(p_list)
         q_sim = torch.stack(q_list)
-        h_sim = torch.stack(h_list[:-1])
-        v_low_sim = torch.tensor(v_list[:-1], dtype=torch.float32)
+        h_sim = torch.stack(h_list[:-1])  # Remove the extra head value (we have TH+1 heads)
+        v_low_sim = torch.tensor(v_list[:-1], dtype=torch.float32)  # Remove extra volume
         
         return p_sim, q_sim, h_sim, v_low_sim
 
@@ -822,9 +546,9 @@ def run_piecewise_optimization():
             optimizer = PiecewiseMILPOptimizerSOS2(
                 T=T, 
                 DA_prices=prices_24h,
-                num_segments_h=10,
-                num_segments_p_pump=10,
-                num_segments_p_turbine=10
+                num_segments_h=16,
+                num_segments_p_pump=16,
+                num_segments_p_turbine=16
             )
             
             results, metrics = optimizer.solve()
@@ -893,169 +617,5 @@ def run_piecewise_optimization():
     print(f"Benchmark results saved to MIQP_piecewise_benchmark.csv ({len(benchmark_results)} rows)")
 
 # %% Execute
-# if __name__ == "__main__":
-#     run_piecewise_optimization()
-
-# %% Rerun missing date 2024/02/14
-import pandas as pd
-import torch
-import time
-
-def rerun_missing_date():
-    """Rerun optimization for missing date 2024/02/14 and append to benchmark CSV."""
-    
-    # Load price data
-    print("Loading price data...")
-    price_data = read_price_data()
-    
-    # Check if the missing date exists in price data
-    target_date = '2024/2/14'  # Correct format without leading zero
-    if target_date not in price_data:
-        print(f"Date {target_date} not found in price data!")
-        return
-    
-    # Load existing benchmark results
-    try:
-        # Try different encodings to handle potential encoding issues
-        try:
-            existing_benchmark = pd.read_csv("MIQP_piecewise_benchmark.csv", encoding='utf-8')
-        except UnicodeDecodeError:
-            try:
-                existing_benchmark = pd.read_csv("MIQP_piecewise_benchmark.csv", encoding='latin-1')
-            except UnicodeDecodeError:
-                existing_benchmark = pd.read_csv("MIQP_piecewise_benchmark.csv", encoding='cp1252')
-        print(f"Loaded existing benchmark with {len(existing_benchmark)} entries")
-        
-        # Check if date already exists in benchmark
-        if target_date in existing_benchmark['Date'].values:
-            print(f"Date {target_date} already exists in benchmark!")
-            return
-            
-    except FileNotFoundError:
-        print("Benchmark file not found, will create new one")
-        existing_benchmark = pd.DataFrame()
-    
-    # Initialize simulation parameters
-    head_init_val = torch.tensor(head_init, dtype=torch.float32, device=device)
-    v_low_init_val = torch.tensor(v_low_init, dtype=torch.float32, device=device)
-    
-    params = HydroParameters(
-        head_init=head_init_val,
-        v_low_init=v_low_init_val,
-        neg_min=neg_min, neg_max=neg_max,
-        pos_min=pos_min, pos_max=pos_max,
-        predict_q_poly=predict_q_poly,
-        h_to_v_low_fitted=h_to_v_low_fitted,
-        v_low_to_h_fitted=v_low_to_h_fitted
-    )
-    
-    simulator = SimulationLayer(params)
-    
-    # Process the missing date
-    prices_24h = price_data[target_date]
-    print(f"Processing {target_date}...")
-    
-    try:
-        start_time = time.time()
-        
-        # Create and solve optimizer (using SOS2 version with 10 segments)
-        T = 24
-        optimizer = PiecewiseMILPOptimizerSOS2(
-            T=T, 
-            DA_prices=prices_24h,
-            num_segments_h=10,
-            num_segments_p_pump=10,
-            num_segments_p_turbine=10
-        )
-        
-        results, metrics = optimizer.solve()
-        
-        solution_time = time.time() - start_time
-        
-        if results is None:
-            print(f"No optimal solution found for {target_date}!")
-            return
-        
-        # Run simulation
-        p_tensor = torch.tensor(results['p'], dtype=torch.float32, device=device)
-        q_tensor = torch.tensor(results['q'], dtype=torch.float32, device=device)
-        h_tensor = torch.tensor(results['h'], dtype=torch.float32, device=device)
-        
-        p_sim, q_sim, h_sim, v_low_sim = simulator.simulate_operation(p_tensor, q_tensor, h_tensor)
-        
-        # Calculate simulation profit
-        da_prices_tensor = torch.tensor(prices_24h, dtype=torch.float32, device=device)
-        profit, si_penalty, vol_penalty, op_cost = simulator.calc_profit(
-            p_sim, p_tensor[:len(p_sim)], v_low_sim, da_prices_tensor[:len(p_sim)]
-        )
-        
-        # Create new benchmark entry
-        new_benchmark_entry = {
-            'Date': target_date,
-            'Solving Time (s)': solution_time,
-            'MIP Gap': metrics['MIPGap'],
-            'Binary Variables': metrics['NumBinVars'],
-            'Continuous Variables': metrics['NumVars'] - metrics['NumBinVars'],
-            'Total Constraints': metrics['NumConstrs'],
-            'Expected Profit (€)': metrics['ExpectedProfit'],
-            'SI Penalty (€)': si_penalty.item(),
-            'Vol Penalty (€)': vol_penalty.item(),
-            'Op Cost (€)': op_cost.item(),
-            'Ex-post Profit (€)': profit.item()
-        }
-        
-        # Append to existing benchmark
-        new_benchmark_df = pd.DataFrame([new_benchmark_entry])
-        updated_benchmark = pd.concat([existing_benchmark, new_benchmark_df], ignore_index=True)
-        
-        # Sort by date to maintain chronological order
-        updated_benchmark['Date'] = pd.to_datetime(updated_benchmark['Date'])
-        updated_benchmark = updated_benchmark.sort_values('Date')
-        updated_benchmark['Date'] = updated_benchmark['Date'].dt.strftime('%Y/%m/%d')
-        
-        # Save updated benchmark
-        updated_benchmark.to_csv("MIQP_piecewise_benchmark.csv", index=False)
-        
-        print(f"✓ Successfully processed {target_date}")
-        print(f"Expected profit: {metrics['ExpectedProfit']:.2f} €, Ex-post profit: {profit.item():.2f} €")
-        print(f"Updated benchmark CSV with {len(updated_benchmark)} total entries")
-        
-        # Also save detailed results for this date
-        detailed_results = []
-        for hour in range(T):
-            detailed_results.append({
-                'date': target_date,
-                'hour': hour,
-                'power': results['p'][hour],
-                'head': results['h'][hour],
-                'volume': results['v_low'][hour],
-                'flow': results['q'][hour],
-                'price': prices_24h[hour]
-            })
-        
-        # Load existing detailed results and append
-        try:
-            # Try different encodings to handle potential encoding issues
-            try:
-                existing_detailed = pd.read_csv("MIQP_piecewise_results.csv", encoding='utf-8')
-            except UnicodeDecodeError:
-                try:
-                    existing_detailed = pd.read_csv("MIQP_piecewise_results.csv", encoding='latin-1')
-                except UnicodeDecodeError:
-                    existing_detailed = pd.read_csv("MIQP_piecewise_results.csv", encoding='cp1252')
-            new_detailed_df = pd.DataFrame(detailed_results)
-            updated_detailed = pd.concat([existing_detailed, new_detailed_df], ignore_index=True)
-            updated_detailed.to_csv("MIQP_piecewise_results.csv", index=False)
-            print(f"Also updated detailed results CSV with {len(updated_detailed)} total rows")
-        except FileNotFoundError:
-            new_detailed_df = pd.DataFrame(detailed_results)
-            new_detailed_df.to_csv("MIQP_piecewise_results.csv", index=False)
-            print(f"Created new detailed results CSV with {len(new_detailed_df)} rows")
-        
-    except Exception as e:
-        print(f"Error processing {target_date}: {e}")
-        raise
-
-# Run the missing date
 if __name__ == "__main__":
-    rerun_missing_date()
+    run_piecewise_optimization()
