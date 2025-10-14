@@ -70,7 +70,7 @@ def read_price_data(file_path="../../Data/price_data_2024.csv"):
 
 # %% Piecewise MILP Optimizer with SOS2 constraints
 class PiecewiseMILPOptimizerSOS2:
-    def __init__(self, T, DA_prices, num_segments_h=5, num_segments_p_pump=5, num_segments_p_turbine=5, 
+    def __init__(self, T, DA_prices, num_segments_h=10, num_segments_p_pump=10, num_segments_p_turbine=10, 
                  C_op=0.4, M_p=10000, h_init=head_init, h_min=head_min, h_max=head_max, 
                  v_low_init=v_low_init, v_low_target=target_vol_low):
         """
@@ -511,6 +511,24 @@ def run_piecewise_optimization():
     print("Loading price data...")
     price_data = read_price_data()
     
+    # Skip specific dates
+    dates_to_skip = ['2024/12/12']
+    for date in dates_to_skip:
+        if date in price_data:
+            del price_data[date]
+            print(f"Skipped date: {date}")
+    
+    # Print all dates and count
+    print("\n" + "="*60)
+    print("DATES IN DATABASE:")
+    print("="*60)
+    all_dates = sorted(price_data.keys())
+    for i, date in enumerate(all_dates, start=1):
+        print(f"{i}. {date}")
+    print("="*60)
+    print(f"Total number of dates: {len(all_dates)}")
+    print("="*60 + "\n")
+    
     # Initialize result lists
     detailed_results = []
     benchmark_results = []
@@ -546,9 +564,9 @@ def run_piecewise_optimization():
             optimizer = PiecewiseMILPOptimizerSOS2(
                 T=T, 
                 DA_prices=prices_24h,
-                num_segments_h=16,
-                num_segments_p_pump=16,
-                num_segments_p_turbine=16
+                num_segments_h=10,
+                num_segments_p_pump=10,
+                num_segments_p_turbine=10
             )
             
             results, metrics = optimizer.solve()
@@ -619,3 +637,5 @@ def run_piecewise_optimization():
 # %% Execute
 if __name__ == "__main__":
     run_piecewise_optimization()
+
+# %%

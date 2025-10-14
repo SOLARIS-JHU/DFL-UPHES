@@ -1,0 +1,23 @@
+Pretraining Benchmark Summary for MIQP_piecewise_results_relative_noise_50pct Database
+===========================
+
+Total configurations tested: 10
+Total dates processed: 20
+
+Best Configuration for Optimized Profit:
+  Architecture: LSTM
+  Number of Layers: 3
+  Max Iterations: 1
+  Noise Level: 0.5
+  Average Optimized Profit: 4676.87
+
+Best Configuration for Simulated Profit:
+  Architecture: LSTM
+  Number of Layers: 3
+  Max Iterations: 1
+  Noise Level: 0.5
+  Average Simulated Profit: 4566.36
+
+Average training time: 42.50 seconds
+Maximum training time: 373.29 seconds
+Minimum training time: 2.19 seconds

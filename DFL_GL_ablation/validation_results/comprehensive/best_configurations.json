@@ -1,0 +1,182 @@
+{
+    "2024-4-9": {
+        "database": "MIQP_piecewise_results_relative_noise_60pct",
+        "data_type": "relative_noise",
+        "noise_level": 0.6,
+        "architecture": "LSTM",
+        "num_layers": 3,
+        "max_iterations": 2,
+        "profit": 1950.66064453125
+    },
+    "2024-7-9": {
+        "database": "MIQP_piecewise_results_random_samples",
+        "data_type": "random_samples",
+        "noise_level": null,
+        "architecture": "LSTM",
+        "num_layers": 3,
+        "max_iterations": 1,
+        "profit": 4528.44580078125
+    },
+    "2024-10-5": {
+        "database": "MIQP_piecewise_results_relative_noise_50pct",
+        "data_type": "relative_noise",
+        "noise_level": 0.5,
+        "architecture": "LSTM",
+        "num_layers": 3,
+        "max_iterations": 9,
+        "profit": 3610.25
+    },
+    "2024-1-30": {
+        "database": "MIQP_piecewise_results_random_samples",
+        "data_type": "random_samples",
+        "noise_level": null,
+        "architecture": "LSTM",
+        "num_layers": 3,
+        "max_iterations": 6,
+        "profit": 1758.52734375
+    },
+    "2024-8-3": {
+        "database": "MIQP_piecewise_results_random_samples",
+        "data_type": "random_samples",
+        "noise_level": null,
+        "architecture": "LSTM",
+        "num_layers": 3,
+        "max_iterations": 1,
+        "profit": 3431.11865234375
+    },
+    "2024-7-19": {
+        "database": "MIQP_piecewise_results_relative_noise_80pct",
+        "data_type": "relative_noise",
+        "noise_level": 0.8,
+        "architecture": "LSTM",
+        "num_layers": 3,
+        "max_iterations": 1,
+        "profit": 3809.601806640625
+    },
+    "2024-2-14": {
+        "database": "MIQP_piecewise_results_random_samples",
+        "data_type": "random_samples",
+        "noise_level": null,
+        "architecture": "LSTM",
+        "num_layers": 3,
+        "max_iterations": 4,
+        "profit": 1533.363037109375
+    },
+    "2024-11-21": {
+        "database": "MIQP_piecewise_results_relative_noise_20pct",
+        "data_type": "relative_noise",
+        "noise_level": 0.2,
+        "architecture": "LSTM",
+        "num_layers": 3,
+        "max_iterations": 8,
+        "profit": 3966.04541015625
+    },
+    "2024-6-16": {
+        "database": "MIQP_piecewise_results_relative_noise_80pct",
+        "data_type": "relative_noise",
+        "noise_level": 0.8,
+        "architecture": "LSTM",
+        "num_layers": 3,
+        "max_iterations": 1,
+        "profit": 4089.55029296875
+    },
+    "2024-1-9": {
+        "database": "MIQP_piecewise_results_relative_noise_60pct",
+        "data_type": "relative_noise",
+        "noise_level": 0.6,
+        "architecture": "LSTM",
+        "num_layers": 3,
+        "max_iterations": 7,
+        "profit": 2909.82373046875
+    },
+    "2024-8-15": {
+        "database": "MIQP_piecewise_results_random_samples",
+        "data_type": "random_samples",
+        "noise_level": null,
+        "architecture": "LSTM",
+        "num_layers": 3,
+        "max_iterations": 1,
+        "profit": 5014.35498046875
+    },
+    "2024-12-12": {
+        "database": "MIQP_piecewise_results_relative_noise_70pct",
+        "data_type": "relative_noise",
+        "noise_level": 0.7,
+        "architecture": "LSTM",
+        "num_layers": 3,
+        "max_iterations": 1,
+        "profit": 20734.162109375
+    },
+    "2024-4-24": {
+        "database": "MIQP_piecewise_results_relative_noise_70pct",
+        "data_type": "relative_noise",
+        "noise_level": 0.7,
+        "architecture": "LSTM",
+        "num_layers": 3,
+        "max_iterations": 1,
+        "profit": 3134.298828125
+    },
+    "2024-8-9": {
+        "database": "MIQP_piecewise_results_relative_noise_30pct",
+        "data_type": "relative_noise",
+        "noise_level": 0.3,
+        "architecture": "LSTM",
+        "num_layers": 3,
+        "max_iterations": 1,
+        "profit": 4886.076171875
+    },
+    "2024-2-6": {
+        "database": "MIQP_piecewise_results_relative_noise_30pct",
+        "data_type": "relative_noise",
+        "noise_level": 0.3,
+        "architecture": "LSTM",
+        "num_layers": 3,
+        "max_iterations": 4,
+        "profit": 3271.864013671875
+    },
+    "2024-7-4": {
+        "database": "MIQP_piecewise_results_relative_noise_20pct",
+        "data_type": "relative_noise",
+        "noise_level": 0.2,
+        "architecture": "LSTM",
+        "num_layers": 3,
+        "max_iterations": 1,
+        "profit": 3608.20947265625
+    },
+    "2024-3-23": {
+        "database": "MIQP_piecewise_results_relative_noise_60pct",
+        "data_type": "relative_noise",
+        "noise_level": 0.6,
+        "architecture": "LSTM",
+        "num_layers": 3,
+        "max_iterations": 1,
+        "profit": 1988.4482421875
+    },
+    "2024-12-13": {
+        "database": "MIQP_piecewise_results_relative_noise_40pct",
+        "data_type": "relative_noise",
+        "noise_level": 0.4,
+        "architecture": "LSTM",
+        "num_layers": 3,
+        "max_iterations": 6,
+        "profit": 8012.21533203125
+    },
+    "2024-10-21": {
+        "database": "MIQP_piecewise_results_relative_noise_20pct",
+        "data_type": "relative_noise",
+        "noise_level": 0.2,
+        "architecture": "LSTM",
+        "num_layers": 3,
+        "max_iterations": 1,
+        "profit": 5381.10302734375
+    },
+    "2024-8-5": {
+        "database": "MIQP_piecewise_results_relative_noise_80pct",
+        "data_type": "relative_noise",
+        "noise_level": 0.8,
+        "architecture": "LSTM",
+        "num_layers": 3,
+        "max_iterations": 1,
+        "profit": 5544.96435546875
+    }
+}

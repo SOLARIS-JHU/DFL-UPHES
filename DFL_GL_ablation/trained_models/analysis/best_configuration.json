@@ -1,0 +1,8 @@
+{
+    "architecture": "LSTM",
+    "num_layers": 3,
+    "max_iterations": 1,
+    "noise_level": 0.2,
+    "date": "2024-12-12",
+    "simulated_profit": 20713.72
+}
