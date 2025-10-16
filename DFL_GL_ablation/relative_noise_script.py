@@ -13,7 +13,7 @@ and generates multiple datasets with different types of noise/variations:
 Output: Multiple CSV files with noisy/random variants of the original optimization results
 for robust analysis of hydro power plant operations under uncertainty.
 """
-#%%
+# %%  Imports
 import torch
 import numpy as np
 import pandas as pd
@@ -41,6 +41,7 @@ with open('../preprocess.pkl', 'rb') as f:
 head_init = 77.0
 v_low_init = h_to_v_low_fitted(head_init)
 
+# %% noise insertion 
 class HydroParameters:
     def __init__(
         self,
@@ -547,8 +548,8 @@ def analyze_baseline_changes(df, params):
 def main_noise_insertion():
     """Main function to process MIQP linear results with multiple relative noise levels."""
     
-    # Define relative noise levels to generate (10% to 80%)
-    noise_levels = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]
+    # Define relative noise levels to generate (0% to 80%)
+    noise_levels = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]
     
     # Load original results from MIQP directory
     original_file = "../MIQP/MIQP_linear/MILP_global_linear_results.csv"
@@ -582,14 +583,25 @@ def main_noise_insertion():
     # Analyze baseline simulation changes
     analyze_baseline_changes(df, params)
     
+    # Create 0% noise file (direct copy of original)
+    print(f"\n=== CREATING 0% NOISE FILE ===")
+    output_0pct = "MIQP_linear_results_relative_noise_00pct.csv"
+    df.to_csv(output_0pct, index=False)
+    print(f"✓ {output_0pct} created (direct copy of original)")
+    print(f"  Total rows: {len(df)}")
+    print(f"  Date range: {df['date'].min()} to {df['date'].max()}")
+    print(f"  Unique dates: {len(df['date'].unique())}")
+    
     print(f"\n=== NOISE APPLICATION WORKFLOW ===")
     print("1. Original MIQP data → Baseline simulation (handles any clamping/mode changes)")
     print("2. Baseline results → Add relative noise (% of capacity range) → Noisy simulation") 
     print("3. Generate CSV files and analyze actual relative errors achieved")
     print("Note: Noise is applied to baseline results, not original data")
     
-    # Process each noise level
+    # Process each noise level (skip 0.0 as it's already created)
     for noise_level in noise_levels:
+        if noise_level == 0.0:
+            continue  # Already created above
         try:
             # Process the dataset for this noise level
             final_df, actual_error_stats = process_noise_level(df, noise_level, params)
@@ -614,9 +626,10 @@ def main_noise_insertion():
                     print(f"  Actual range: [{actual_error_stats['min']*100:.2f}%, {actual_error_stats['max']*100:.2f}%]")
                     print(f"  25th-75th percentile: [{actual_error_stats['percentile_25']*100:.2f}%, {actual_error_stats['percentile_75']*100:.2f}%]")
                     
-                    # Compare target vs actual
-                    deviation_from_target = abs(actual_error_stats['mean'] - noise_level) / noise_level * 100
-                    print(f"  Deviation from target: {deviation_from_target:.1f}%")
+                    # Compare target vs actual (avoid division by zero)
+                    if noise_level > 0:
+                        deviation_from_target = abs(actual_error_stats['mean'] - noise_level) / noise_level * 100
+                        print(f"  Deviation from target: {deviation_from_target:.1f}%")
                 
                 # Show summary statistics
                 print(f"  \n=== PHYSICAL VARIABLE RANGES ===")
@@ -694,7 +707,7 @@ def main_noise_insertion():
 if __name__ == "__main__":
     main_noise_insertion()
 
-#%%
+# %% Random Sampling with Mode Preservation
 """
 Code for random sampling of power schedules within power boundaries
 while retaining operational modes with retry mechanism for boundary violations.
@@ -1152,7 +1165,7 @@ def compare_all_methods():
 if __name__ == "__main__":
     compare_all_methods()
 
-#%%
+# %% Profit Calculation
 """
 Calculate ex-post profit for all perturbation methods using SimulationLayer.
 """
@@ -1324,7 +1337,6 @@ def get_price_for_date(date_str, price_data_hour):
     except Exception as e:
         return None
 
-
 def calculate_expost_profit_for_dataset(df, params, price_data_hour, method_name, exclude_date='2024-12-12'):
     """
     Calculate ex-post profit for all dates in a dataset.
@@ -1413,7 +1425,6 @@ def calculate_expost_profit_for_dataset(df, params, price_data_hour, method_name
         return stats
     else:
         return None
-
 
 def compare_expost_profits():
     """
@@ -1554,7 +1565,6 @@ def compare_expost_profits():
     
     else:
         print("\nNo results found to compare!")
-
 
 if __name__ == "__main__":
     compare_expost_profits()
