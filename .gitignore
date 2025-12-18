@@ -180,6 +180,8 @@ cython_debug/
 *.bmp
 *.svg
 *.pdf
+*.zip
+*.7z
 
 *.npy
 *.npz

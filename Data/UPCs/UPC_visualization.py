@@ -12,7 +12,7 @@
 – Adds 3D labels for Pump Mode, Turbine Mode, Idle Mode with leader lines from surface midpoints.
 – Higher-resolution color gradients: increased mesh sampling & more contour levels.
 – Compares original UPC surfaces with linear and polynomial fitted surfaces in 3D visualizations.
-– Saves all figures as SVG files (9 total: 3 3D plots + 6 2D contour plots).
+– Saves all figures as PDF files (9 total: 3 3D plots + 6 2D contour plots).
 """
 #%% Imports and setup
 import numpy as np
@@ -133,7 +133,7 @@ ax.view_init(elev=30, azim=225)
 mapp = plt.cm.ScalarMappable(norm=plt.Normalize(vmin,vmax), cmap=cmap)
 fig.colorbar(mapp, ax=ax, shrink=0.6, pad=0.1).set_label('Flow Rate (m³/s)')
 plt.tight_layout()
-plt.savefig('francis_turbine_3d_visualization.svg', format='svg', bbox_inches='tight')
+plt.savefig('francis_turbine_3d_visualization.pdf', format='pdf', bbox_inches='tight')
 plt.show()
 
 # === 8) 2D Contour Plots ===
@@ -149,8 +149,8 @@ for Pg, Hg, Fa, title in [(P_p,H_p,flow_pump,'Pump Mode'), (P_t,H_t,flow_turbine
     fig.colorbar(cf, ax=ax, label='Flow Rate (m³/s)')
     plt.tight_layout()
     
-    filename = f"francis_turbine_{title.lower().replace(' ', '_')}_contours.svg"
-    plt.savefig(filename, format='svg', bbox_inches='tight')
+    filename = f"francis_turbine_{title.lower().replace(' ', '_')}_contours.pdf"
+    plt.savefig(filename, format='pdf', bbox_inches='tight')
     plt.show()
 
 #%% Global Linear Approximation 3D Visualization
@@ -223,7 +223,7 @@ mapp_lin = plt.cm.ScalarMappable(norm=plt.Normalize(vmin, vmax), cmap=cmap)
 fig_lin.colorbar(mapp_lin, ax=ax_lin, shrink=0.6, pad=0.1).set_label('Flow Rate (m³/s)')
 
 plt.tight_layout()
-plt.savefig('francis_turbine_linear_3d_visualization.svg', format='svg', bbox_inches='tight')
+plt.savefig('francis_turbine_linear_3d_visualization.pdf', format='pdf', bbox_inches='tight')
 plt.show()
 
 #%% Polynomial Approximation 3D Visualization
@@ -235,6 +235,7 @@ import numpy as np
 import torch
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
+from matplotlib.patches import Rectangle
 
 # assume power_all, power_pump, power_turbine, head_all,
 # flow_pump, flow_turbine, predict_q_poly,
@@ -301,7 +302,7 @@ cbar = fig.colorbar(mappable, ax=ax, shrink=0.6, pad=0.1)
 cbar.set_label('Flow Rate (m³/s)')
 
 plt.tight_layout()
-plt.savefig('polynomial_vs_linear_3d_depthsorted.svg', bbox_inches='tight')
+plt.savefig('polynomial_vs_linear_3d_depthsorted.pdf', bbox_inches='tight')
 plt.show()
 
 #%% 2D Contour Plots for Linear and Polynomial Approximations
@@ -331,11 +332,11 @@ for Pg, Hg, Fa, title in linear_data:
     fig.colorbar(cf, ax=ax, label='Flow Rate (m³/s)')
     plt.tight_layout()
     
-    filename = f"francis_turbine_{title.lower().replace(' ', '_')}_contours.svg"
-    plt.savefig(filename, format='svg', bbox_inches='tight')
+    filename = f"francis_turbine_{title.lower().replace(' ', '_')}_contours.pdf"
+    plt.savefig(filename, format='pdf', bbox_inches='tight')
     plt.show()
 
-# Polynomial approximation contours  
+# Polynomial approximation contours - Individual plots
 polynomial_data = [
     (P_p_poly, H_p_poly, qt_pump, 'Polynomial Pump Mode'),
     (P_t_poly, H_t_poly, qt_turb, 'Polynomial Turbine Mode')
@@ -351,7 +352,129 @@ for Pg, Hg, Fa, title in polynomial_data:
     ax.set_ylabel('Head (m)')
     fig.colorbar(cf, ax=ax, label='Flow Rate (m³/s)')
     plt.tight_layout()
-    
-    filename = f"francis_turbine_{title.lower().replace(' ', '_')}_contours.svg"
-    plt.savefig(filename, format='svg', bbox_inches='tight')
+
+    filename = f"francis_turbine_{title.lower().replace(' ', '_')}_contours.pdf"
+    plt.savefig(filename, format='pdf', bbox_inches='tight')
     plt.show()
+
+#%% Combined Polynomial Pump and Turbine Mode Contours with Finer Grid
+"""
+Single combined plot of polynomial pump and turbine mode contours
+with axis break to bring manifolds closer together and finer contours.
+"""
+import matplotlib.patches as mpatches
+
+# Apply IEEE publication-quality style
+plt.rcParams.update({
+    'font.family': 'serif',
+    'font.serif': ['Times New Roman', 'Times', 'DejaVu Serif'],
+    'font.size': 8,
+    'axes.labelsize': 8,
+    'axes.titlesize': 10,
+    'xtick.labelsize': 8,
+    'ytick.labelsize': 8,
+    'legend.fontsize': 7,
+    'axes.linewidth': 0.8,
+    'grid.linewidth': 0.4,
+    'lines.linewidth': 1.2,
+    'lines.markersize': 4,
+    'savefig.dpi': 600,
+    'savefig.bbox': 'tight',
+    'savefig.pad_inches': 0.01,
+    'legend.framealpha': 0.95,
+    'legend.edgecolor': 'black',
+    'legend.fancybox': False
+})
+
+# Create much finer head sampling (5x resolution)
+head_all_fine = np.linspace(head_all.min(), head_all.max(), len(head_all) * 5)
+
+# Build separate finer meshes for pump and turbine
+P_pump_fine, H_pump_fine = np.meshgrid(power_pump, head_all_fine)
+P_turb_fine, H_turb_fine = np.meshgrid(power_turbine, head_all_fine)
+
+# Predict flow rates on finer grids
+p_pump_tensor = torch.tensor(P_pump_fine, dtype=torch.float32)
+h_pump_tensor = torch.tensor(H_pump_fine, dtype=torch.float32)
+q_pump_fine = predict_q_poly(p_pump_tensor, h_pump_tensor).numpy()
+
+p_turb_tensor = torch.tensor(P_turb_fine, dtype=torch.float32)
+h_turb_tensor = torch.tensor(H_turb_fine, dtype=torch.float32)
+q_turb_fine = predict_q_poly(p_turb_tensor, h_turb_tensor).numpy()
+
+# Mask pump mode
+minp_fine = neg_min(h_pump_tensor).numpy()
+maxp_fine = neg_max(h_pump_tensor).numpy()
+mask_pump_valid = (P_pump_fine >= minp_fine) & (P_pump_fine <= maxp_fine)
+q_pump_fine[~mask_pump_valid] = np.nan
+
+# Mask turbine mode
+mint_fine = pos_min(h_turb_tensor).numpy()
+maxt_fine = pos_max(h_turb_tensor).numpy()
+mask_turb_valid = (P_turb_fine >= mint_fine) & (P_turb_fine <= maxt_fine)
+q_turb_fine[~mask_turb_valid] = np.nan
+
+# Create figure with two side-by-side subplots (axis break)
+fig, (ax_pump, ax_turb) = plt.subplots(1, 2, figsize=(6, 2), dpi=600, sharey=True)
+
+# Finer contour levels
+levels2d_fine = np.linspace(vmin, vmax, 300)
+
+# Plot pump mode (left subplot)
+cf_pump = ax_pump.contourf(P_pump_fine, H_pump_fine, q_pump_fine, 
+                            levels=levels2d_fine, cmap=cmap, vmin=vmin, vmax=vmax)
+                            
+ct_pump = ax_pump.contour(P_pump_fine, H_pump_fine, q_pump_fine, linestyles='dashed',
+                           levels=15, colors='w', linewidths=0.4, alpha=0.6)
+ax_pump.clabel(ct_pump, fmt='%1.1f', fontsize=5)
+
+ax_pump.set_xlim([power_pump.min(), -2.5])
+ax_pump.set_ylabel('Head (m)')
+ax_pump.spines['right'].set_visible(False)
+
+# Plot turbine mode (right subplot)
+cf_turb = ax_turb.contourf(P_turb_fine, H_turb_fine, q_turb_fine,
+                            levels=levels2d_fine, cmap=cmap, vmin=vmin, vmax=vmax)
+ct_turb = ax_turb.contour(P_turb_fine, H_turb_fine, q_turb_fine, linestyles='dashed',
+                           levels=25, colors='k', linewidths=0.4, alpha=0.6)
+ax_turb.clabel(ct_turb, fmt='%1.1f', fontsize=5)
+
+ax_turb.set_xlim([1.5, power_turbine.max()])
+ax_turb.spines['left'].set_visible(False)
+ax_turb.tick_params(left=False)
+
+# Set x-axis ticks at every 1.0 MW
+ax_pump.set_xticks(np.arange(np.floor(power_pump.min()), -2, 1.0))
+ax_turb.set_xticks(np.arange(1, np.ceil(power_turbine.max())+1, 1.0))
+
+# Major gridlines only (at 1.0 MW intervals)
+ax_pump.grid(True, which='major', alpha=0.4, linestyle='-', linewidth=0.6, color='gray')
+ax_turb.grid(True, which='major', alpha=0.4, linestyle='-', linewidth=0.6, color='gray')
+
+# Add axis break markers (diagonal lines)
+d = 0.015  # size of diagonal lines
+kwargs = dict(transform=ax_pump.transAxes, color='k', clip_on=False, linewidth=0.8)
+ax_pump.plot((1-d, 1+d), (-d, +d), **kwargs)
+ax_pump.plot((1-d, 1+d), (1-d, 1+d), **kwargs)
+
+kwargs.update(transform=ax_turb.transAxes)
+ax_turb.plot((-d, +d), (-d, +d), **kwargs)
+ax_turb.plot((-d, +d), (1-d, 1+d), **kwargs)
+
+# Reduce spacing between subplots
+plt.subplots_adjust(wspace=0.05)
+
+# Add single shared x-label
+fig.text(0.45, -0.03, 'Power (MW)', ha='center', fontsize=8) 
+
+# Add colorbar spanning both subplots with integer formatting
+cbar = fig.colorbar(cf_turb, ax=[ax_pump, ax_turb], label='Flow Rate (m³/s)', 
+                    pad=0.02, aspect=30, format='%.1f')
+
+plt.savefig('francis_turbine_polynomial_combined_contours.pdf',
+            format='pdf', bbox_inches='tight', pad_inches=0.01)
+plt.savefig('francis_turbine_polynomial_combined_contours.png',
+            format='png', bbox_inches='tight', pad_inches=0.01)
+print("Saved combined polynomial contours with axis break: francis_turbine_polynomial_combined_contours.pdf/.png")
+plt.show()
+# %%
