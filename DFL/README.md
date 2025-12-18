@@ -1,6 +1,6 @@
-# DFL - Deep Learning Framework for Hydropower Economic Scheduling
+# DFL - Decision focused learning framework for UPHES scheduling
 
-A refactored, modular framework for training and validating neural network-based optimization methods for pumped-storage hydropower systems.
+<!-- A refactored, modular framework for training and validating neural network-based optimization methods for pumped-storage hydropower systems. -->
 
 ## Overview
 
