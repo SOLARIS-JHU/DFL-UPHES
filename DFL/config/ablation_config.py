@@ -24,8 +24,8 @@ class AblationConfig(PWConfig):
         # Key difference: disable neural network
         self.use_neural_network = False
 
-        # Use fixed weights for all penalties
-        # These values are used consistently across all time steps
-        self.fixed_w_p = 0.6   # Power deviation penalty weight
-        self.fixed_w_q = 0.02  # Flow deviation penalty weight
-        self.fixed_w_h = 0.1   # Head deviation penalty weight
+        # Fixed penalty weights (used instead of neural network predictions)
+        # These values are applied uniformly across all time steps
+        self.fixed_w_p = 0.1   # Power deviation penalty weight
+        self.fixed_w_q = 0.01  # Flow deviation penalty weight
+        self.fixed_w_h = 0.05  # Head deviation penalty weight

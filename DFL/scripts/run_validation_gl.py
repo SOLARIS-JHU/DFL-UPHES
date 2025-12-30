@@ -1,32 +1,35 @@
 #!/usr/bin/env python3
 """
-Example script: Pretraining for Global Linear (GL) variant
+Full Validation Script for Global Linear (GL) Variant
 
-This script demonstrates how to use the refactored DFL framework
-to perform pretraining with the GL configuration.
+This script reproduces the exact validation process from DFL_GL-based/
+using the refactored DFL framework.
+
+It validates trained models for:
+- Noise levels: 10%, 20%, 30%, 40%, 50%, 60%, 70%, 80%
+- Random samples dataset
+- Architecture: LSTM with 3 layers
+- Max iterations: [1, 5]
+- On new price scenarios from 2024
 """
 
 import sys
 sys.path.append('..')
 
-# Import configuration
 from DFL.config.gl_config import GLConfig
-
-# Import utilities
-from DFL.utils.helpers import setup_device, load_portfolio_data, load_preprocessed_data, initialize_head_and_volume
-
-# Import core components
+from DFL.utils.helpers import (
+    setup_device, load_portfolio_data,
+    load_preprocessed_data, initialize_head_and_volume
+)
 from DFL.core.parameters import HydroParameters
-
-# Import training
-from DFL.training.pretraining import pretraining_single_noise_level
+from DFL.validation.validator import comprehensive_validation
 
 
 def main():
-    """Main entry point for GL pretraining."""
-    print("="*80)
-    print("DFL Pretraining - Global Linear (GL) Variant")
-    print("="*80)
+    """Main entry point for GL validation."""
+    print("=" * 80)
+    print("DFL Full Validation - Global Linear (GL) Variant")
+    print("=" * 80)
 
     # 1. Setup device
     device = setup_device()
@@ -51,9 +54,11 @@ def main():
         preprocess_data['h_to_v_low_fitted'], device
     )
 
-    # 5. Create configuration
+    # 5. Create configuration (GL)
     config = GLConfig()
-    print(f"\nConfiguration: {config}")
+    print(f"\nConfiguration: GL variant")
+    print(f"  Data pattern: {config.data_file_pattern}")
+    print(f"  Architecture: {config.architecture}")
 
     # 6. Initialize HydroParameters
     params = HydroParameters(
@@ -88,19 +93,21 @@ def main():
         device=device
     )
 
-    # 7. Run pretraining for a single noise level (e.g., 10%)
-    print("\nStarting pretraining for 10% noise level...")
-    pretraining_single_noise_level(
+    # 7. Run comprehensive validation
+    print("\nStarting comprehensive validation...")
+    print("This will validate all trained models on new price scenarios")
+
+    comprehensive_validation(
         config=config,
         params=params,
         device=device,
-        noise_level=0.1,
-        random_samples=False
+        new_price_file="../Data/price_data_2024.csv"
     )
 
-    print("\n" + "="*80)
-    print("Pretraining completed!")
-    print("="*80)
+    print("\n" + "=" * 80)
+    print("Validation completed!")
+    print("Results saved to: ./validation_results/")
+    print("=" * 80)
 
 
 if __name__ == "__main__":

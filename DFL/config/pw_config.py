@@ -16,6 +16,9 @@ class PWConfig(DFLConfig):
         super().__init__()
         self.variant_name = "PW"
         self.data_file_prefix = "MIQP_piecewise_results"
+        # File pattern with {noise} placeholder for substitution
+        self.data_file_pattern = "MIQP_piecewise_results_relative_noise_{noise}.csv"
+        self.random_samples_file = "MIQP_piecewise_results_random_samples.csv"
 
     def get_miqp_file_path(self):
         """

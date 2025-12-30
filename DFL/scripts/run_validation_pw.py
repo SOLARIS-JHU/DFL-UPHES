@@ -1,32 +1,35 @@
 #!/usr/bin/env python3
 """
-Example script: Ablation study (No Neural Network)
+Full Validation Script for Piecewise (PW) Variant
 
-This script demonstrates how to use the refactored DFL framework
-to perform an ablation study without the neural network component.
+This script reproduces the exact validation process from DFL_PW-based/
+using the refactored DFL framework.
+
+It validates trained models for:
+- Noise levels: 10%, 20%, 30%, 40%, 50%, 60%, 70%, 80%
+- Random samples dataset
+- Architecture: LSTM with 3 layers
+- Max iterations: [1, 5]
+- On new price scenarios from 2024
 """
 
 import sys
 sys.path.append('..')
 
-# Import configuration
-from DFL.config.ablation_config import AblationConfig
-
-# Import utilities
-from DFL.utils.helpers import setup_device, load_portfolio_data, load_preprocessed_data, initialize_head_and_volume
-
-# Import core components
+from DFL.config.pw_config import PWConfig
+from DFL.utils.helpers import (
+    setup_device, load_portfolio_data,
+    load_preprocessed_data, initialize_head_and_volume
+)
 from DFL.core.parameters import HydroParameters
-
-# Import training
-from DFL.training.pretraining import pretraining_single_noise_level
+from DFL.validation.validator import comprehensive_validation
 
 
 def main():
-    """Main entry point for ablation study."""
-    print("="*80)
-    print("DFL Ablation Study - No Neural Network")
-    print("="*80)
+    """Main entry point for PW validation."""
+    print("=" * 80)
+    print("DFL Full Validation - Piecewise (PW) Variant")
+    print("=" * 80)
 
     # 1. Setup device
     device = setup_device()
@@ -51,11 +54,11 @@ def main():
         preprocess_data['h_to_v_low_fitted'], device
     )
 
-    # 5. Create configuration
-    config = AblationConfig()
-    print(f"\nConfiguration: {config}")
-    print(f"Neural network enabled: {config.use_neural_network}")
-    print(f"Fixed weights: w_p={config.fixed_w_p}, w_q={config.fixed_w_q}, w_h={config.fixed_w_h}")
+    # 5. Create configuration (PW)
+    config = PWConfig()
+    print(f"\nConfiguration: PW variant")
+    print(f"  Data pattern: {config.data_file_pattern}")
+    print(f"  Architecture: {config.architecture}")
 
     # 6. Initialize HydroParameters
     params = HydroParameters(
@@ -90,19 +93,21 @@ def main():
         device=device
     )
 
-    # 7. Run ablation study for random samples
-    print("\nStarting ablation study with random samples...")
-    pretraining_single_noise_level(
+    # 7. Run comprehensive validation
+    print("\nStarting comprehensive validation...")
+    print("This will validate all trained models on new price scenarios")
+
+    comprehensive_validation(
         config=config,
         params=params,
         device=device,
-        noise_level=None,
-        random_samples=True
+        new_price_file="../Data/price_data_2024.csv"
     )
 
-    print("\n" + "="*80)
-    print("Ablation study completed!")
-    print("="*80)
+    print("\n" + "=" * 80)
+    print("Validation completed!")
+    print("Results saved to: ./validation_results/")
+    print("=" * 80)
 
 
 if __name__ == "__main__":

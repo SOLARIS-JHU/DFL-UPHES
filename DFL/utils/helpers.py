@@ -33,17 +33,33 @@ def setup_device():
     return device
 
 
-def load_portfolio_data(library_path="../Library"):
+def load_portfolio_data(library_path=None):
     """
     Load portfolio data from the Library module.
 
     Args:
-        library_path: Path to the Library directory
+        library_path: Path to the Library directory. If None, will auto-detect.
 
     Returns:
         dict: Dictionary containing portfolio parameters
     """
-    sys.path.append(library_path)
+    import os
+    from pathlib import Path
+
+    # Auto-detect library path if not provided
+    if library_path is None:
+        # Try to find Library directory relative to this file
+        current_file = Path(__file__).resolve()
+        repo_root = current_file.parent.parent.parent  # DFL/utils/helpers.py -> DFL-for-UPHES/
+        library_path = repo_root / "Library"
+
+        if not library_path.exists():
+            # Fallback: try ../Library from current working directory
+            library_path = Path("../Library").resolve()
+
+    library_path = str(library_path)
+    if library_path not in sys.path:
+        sys.path.append(library_path)
 
     try:
         from V_H_relations import load_portfolio_data as load_portfolio
@@ -73,30 +89,52 @@ def load_portfolio_data(library_path="../Library"):
         return None
 
 
-def load_preprocessed_data(preprocess_file="../preprocess.pkl"):
+def load_preprocessed_data(preprocess_file=None):
     """
     Load preprocessed functions and data from pickle file.
 
     Args:
-        preprocess_file: Path to the preprocess.pkl file
+        preprocess_file: Path to the preprocess.pkl file. If None, will auto-detect.
 
     Returns:
         dict: Dictionary containing all preprocessed data and functions
     """
     import dill as pickle
+    from pathlib import Path
+
+    # Auto-detect preprocess file path if not provided
+    if preprocess_file is None:
+        # Try to find preprocess.pkl relative to this file
+        current_file = Path(__file__).resolve()
+        repo_root = current_file.parent.parent.parent  # DFL/utils/helpers.py -> DFL-for-UPHES/
+        preprocess_file = repo_root / "preprocess.pkl"
+
+        if not preprocess_file.exists():
+            # Fallback: try ../preprocess.pkl from current working directory
+            preprocess_file = Path("../preprocess.pkl").resolve()
+
+    # Import torch globally so pickled functions can access it
+    import builtins
+    if not hasattr(builtins, 'torch'):
+        builtins.torch = torch
 
     try:
-        with open(preprocess_file, 'rb') as f:
+        with open(str(preprocess_file), 'rb') as f:
             data = pickle.load(f)
 
         # Data is a tuple, unpack it
         (v_low_h_coeffs, h_v_coeffs, v_low_to_h_fitted, v_low_h_poly, h_vlow_coeff_lin,
          coefs_tur_lin, intercept_tur_lin, coefs_pump_lin, intercept_pump_lin,
          predict_q_linear_tur, predict_q_linear_pump, h_to_v_low_lin, h_fit,
-         neg_min_fit, neg_max_fit, pos_min_fit, pos_max_fit, h_v_poly, h_v_coeffs,
+         neg_min_fit, neg_max_fit, pos_min_fit, pos_max_fit, h_v_poly, h_v_coeffs_dup,
          DA_price_hour, DA_price_quarter, h_to_v_low_fitted, predict_q_poly,
          neg_min, neg_max, pos_min, pos_max, prepare_and_fit_model,
          get_UPC_bound, LR_UPC_bound) = data
+
+        # Make variables available globally for pickled functions
+        builtins.h_v_coeffs = h_v_coeffs_dup
+        builtins.v_low_h_coeffs = v_low_h_coeffs
+        builtins.device = torch.device("cpu")
 
         return {
             'v_low_h_coeffs': v_low_h_coeffs,
@@ -151,7 +189,8 @@ def initialize_head_and_volume(h_to_v_low_fitted, device=None):
         device = torch.device("cpu")
 
     head_init = torch.tensor(77.0, device=device, dtype=torch.float32)
-    v_low_init = torch.tensor(h_to_v_low_fitted(head_init), device=device, dtype=torch.float32)
+    # Pass scalar value to avoid issues with preprocessing.py torch check
+    v_low_init = torch.tensor(h_to_v_low_fitted(77.0), device=device, dtype=torch.float32)
 
     print(f"Initial head: {head_init.item()}, Initial v_low: {v_low_init.item()}")
 

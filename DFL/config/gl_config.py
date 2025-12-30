@@ -16,6 +16,9 @@ class GLConfig(DFLConfig):
         super().__init__()
         self.variant_name = "GL"
         self.data_file_prefix = "MIQP_linear_results"
+        # File pattern with {noise} placeholder for substitution
+        self.data_file_pattern = "MIQP_linear_results_relative_noise_{noise}.csv"
+        self.random_samples_file = "MIQP_linear_results_random_samples.csv"
 
     def get_miqp_file_path(self):
         """

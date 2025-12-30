@@ -41,12 +41,9 @@ SIMILARITY METHODS:
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-from datetime import datetime, timedelta
-from pathlib import Path
-import seaborn as sns
+from datetime import datetime
 from scipy.stats import pearsonr
-from sklearn.preprocessing import StandardScaler
-from typing import Dict, List, Tuple, Union
+from typing import Dict
 import warnings
 warnings.filterwarnings('ignore')
 

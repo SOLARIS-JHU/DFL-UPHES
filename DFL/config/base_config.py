@@ -26,8 +26,10 @@ class DFLConfig:
         self.library_path = "../Library"
         self.preprocess_file = "../preprocess.pkl"
 
-        # Data file prefixes (to be set by subclasses)
+        # Data file prefixes and patterns (to be set by subclasses)
         self.data_file_prefix = None
+        self.data_file_pattern = None  # Pattern with {noise} placeholder
+        self.random_samples_file = None  # File path for random samples data
 
         # Neural network settings
         self.use_neural_network = True
@@ -36,28 +38,30 @@ class DFLConfig:
         self.hidden_size = 128
         self.dropout = 0.2
 
-        # Weight initialization and bounds
-        self.init_w_p = 0.05
-        self.init_w_q = 0.05
-        self.init_w_h = 0.05
-        self.w_p_min = 0.01
-        self.w_p_max = 10.0
-        self.w_q_min = 0.01
-        self.w_q_max = 5.0
+        # Weight initialization and bounds for neural network training
+        self.init_w_p = 0.6      # Initial power deviation penalty weight
+        self.init_w_q = 0.02     # Initial flow deviation penalty weight
+        self.init_w_h = 0.1      # Initial head deviation penalty weight
+
+        # Bounds for learned penalty weights
+        self.w_p_min = 0.1
+        self.w_p_max = 3.0
+        self.w_q_min = 0.001
+        self.w_q_max = 0.2
         self.w_h_min = 0.01
         self.w_h_max = 5.0
 
-        # Fixed weight settings (for ablation or fallback)
+        # Fixed weight settings for baseline (non-neural network) mode
         self.fixed_w_p = 0.6
         self.fixed_w_q = 0.02
         self.fixed_w_h = 0.1
 
         # Training settings
-        self.max_iterations = 3  # Recursive linearization iterations
-        self.penalty_growth_rate = 1.5
-        self.learning_rate = 0.001
-        self.num_epochs = 100
-        self.patience = 20  # Early stopping patience
+        self.max_iterations = 3           # Recursive linearization iterations
+        self.penalty_growth_rate = 1.5    # Growth factor for penalty weights per iteration
+        self.learning_rate = 0.001        # Adam optimizer learning rate
+        self.num_epochs = 500             # Maximum training epochs
+        self.patience = 20                # Early stopping patience
 
         # Optimization settings
         self.time_horizon = 24  # Hours
