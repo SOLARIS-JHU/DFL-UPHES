@@ -179,6 +179,7 @@ cython_debug/
 *.bmp
 *.zip
 *.7z
+*.tex
 
 *.npy
 *.npz
