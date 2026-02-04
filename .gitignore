@@ -171,15 +171,12 @@ cython_debug/
 .pypirc
 
 # === Project outputs / figures / large binaries ===
-*.png
 *.jpg
 *.jpeg
 *.gif
 *.tif
 *.tiff
 *.bmp
-*.svg
-*.pdf
 *.zip
 *.7z
 
