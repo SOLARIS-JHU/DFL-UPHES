@@ -44,7 +44,7 @@ Transform intractable UPHES scheduling into fast, accurate optimization using en
 | 📓 [**Interactive Tutorial**](docs/dfl_uphes_mvp.ipynb) | Jupyter notebook walkthrough |
 | 🚀 [**Quick Start**](#-quick-start) | Get running in 5 minutes |
 | 📚 [**Complete Workflow**](#-complete-workflow) | Full pipeline from preprocessing to results |
-| 🏗️ [**Architecture**](#-repository-architecture) | System design and structure |
+| 🏗️ [**Architecture**](#%EF%B8%8F-repository-architecture) | System design and structure |
 | 📖 [**Citation**](#-citation) | BibTeX entry for papers |
 
 ---
