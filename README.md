@@ -116,6 +116,8 @@ cat DFL/outputs/validation_results/comprehensive/master_validation_benchmarks.cs
 
 ### Pipeline Workflow Diagram
 
+<div style="background-color: white; padding: 20px; border-radius: 8px;">
+
 ```mermaid
 flowchart TD
     A[preprocessing.py] --> B{MIQP Baselines}
@@ -148,6 +150,8 @@ flowchart TD
     style L fill:#98FB98
     style M fill:#98FB98
 ```
+
+</div>
 
 ### Step-by-Step Commands
 
@@ -353,6 +357,8 @@ bash run_full_pipeline.sh
 
 The DFL framework consists of four differentiable components trained end-to-end:
 
+<div style="background-color: white; padding: 20px; border-radius: 8px;">
+
 ```mermaid
 flowchart LR
     subgraph DFL["DFL Framework"]
@@ -374,6 +380,8 @@ flowchart LR
     style Input fill:#E6F3FF
     style Output fill:#FFE4B5
 ```
+
+</div>
 
 **Component Details**:
 
