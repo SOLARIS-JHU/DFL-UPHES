@@ -118,32 +118,29 @@ cat DFL/outputs/validation_results/comprehensive/master_validation_benchmarks.cs
 
 ```mermaid
 flowchart TD
-    subgraph WhiteBoard [" "]
-        A[preprocessing.py] --> B{MIQP Baselines}
-        B --> C[Global Linear<br/>MIQP/MIQP_linear/]
-        B --> D[Piecewise<br/>MIQP/MIQP_piecewise/]
+    A[preprocessing.py] --> B{MIQP Baselines}
+    B --> C[Global Linear<br/>MIQP/MIQP_linear/]
+    B --> D[Piecewise<br/>MIQP/MIQP_piecewise/]
 
-        C --> E[Generate Noisy Data<br/>DFL/scripts/generate_noisy_data.py]
-        D --> E
+    C --> E[Generate Noisy Data<br/>DFL/scripts/generate_noisy_data.py]
+    D --> E
 
-        E --> F[Train DFL-GL<br/>run_pretraining_gl.py]
-        E --> G[Train DFL-PW<br/>run_pretraining_pw.py]
+    E --> F[Train DFL-GL<br/>run_pretraining_gl.py]
+    E --> G[Train DFL-PW<br/>run_pretraining_pw.py]
 
-        F --> H[Validate GL<br/>run_validation_gl.py]
-        G --> I[Validate PW<br/>run_validation_pw.py]
+    F --> H[Validate GL<br/>run_validation_gl.py]
+    G --> I[Validate PW<br/>run_validation_pw.py]
 
-        F --> J[Ablation Study<br/>run_ablation_study.py]
-        G --> J
+    F --> J[Ablation Study<br/>run_ablation_study.py]
+    G --> J
 
-        H --> K{Results Analysis}
-        I --> K
-        J --> K
+    H --> K{Results Analysis}
+    I --> K
+    J --> K
 
-        K --> L[Generate Tables<br/>results/print_tables.py]
-        K --> M[Generate Visualizations<br/>results/visualization.py]
-    end
+    K --> L[Generate Tables<br/>results/print_tables.py]
+    K --> M[Generate Visualizations<br/>results/visualization.py]
 
-    style WhiteBoard fill:#ffffff,stroke:#ffffff
     style A fill:#E6F3FF
     style B fill:#87CEEB
     style E fill:#DDA0DD
@@ -358,21 +355,18 @@ The DFL framework consists of four differentiable components trained end-to-end:
 
 ```mermaid
 flowchart LR
-    subgraph WhiteBoard [" "]
-        subgraph DFL["DFL Framework"]
-            direction TB
-            A[Neural Penalty<br/>Predictor<br/>LSTM<br/><i>DFL/core/models.py</i>] --> B[Local<br/>Linearization<br/>Layer<br/><i>DFL/core/layers.py</i>]
-            B --> C[Differentiable<br/>QP Solver<br/>CVXPYLayers<br/><i>DFL/core/layers.py</i>]
-            C --> D[Physical<br/>Simulator<br/><i>DFL/core/layers.py</i>]
-            D -.Recursive<br/>Feedback.-> B
-        end
-
-        Input[Price Data] --> DFL
-        MIQP[MIQP Results] --> DFL
-        DFL --> Output[Optimal Schedule]
+    subgraph DFL["DFL Framework"]
+        direction TB
+        A[Neural Penalty<br/>Predictor<br/>LSTM<br/><i>DFL/core/models.py</i>] --> B[Local<br/>Linearization<br/>Layer<br/><i>DFL/core/layers.py</i>]
+        B --> C[Differentiable<br/>QP Solver<br/>CVXPYLayers<br/><i>DFL/core/layers.py</i>]
+        C --> D[Physical<br/>Simulator<br/><i>DFL/core/layers.py</i>]
+        D -.Recursive<br/>Feedback.-> B
     end
 
-    style WhiteBoard fill:#ffffff,stroke:#ffffff
+    Input[Price Data] --> DFL
+    MIQP[MIQP Results] --> DFL
+    DFL --> Output[Optimal Schedule]
+
     style A fill:#DDA0DD
     style B fill:#87CEEB
     style C fill:#98FB98
