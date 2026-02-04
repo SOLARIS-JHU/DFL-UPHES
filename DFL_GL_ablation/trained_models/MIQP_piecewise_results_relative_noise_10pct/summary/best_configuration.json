@@ -1,7 +1,0 @@
-{
-    "architecture": "LSTM",
-    "num_layers": 3,
-    "max_iterations": 3,
-    "noise_level": 0.1,
-    "average_simulated_profit": 4581.7965
-}

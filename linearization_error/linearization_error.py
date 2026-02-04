@@ -1,30 +1,13 @@
-"""
-LINEARIZATION ERROR ANALYSIS SCRIPT
-
-This script evaluates the accuracy of three linearization approaches for UPHES optimization:
-1. Piecewise Linearization (SOS2-based segmentation)
-2. Global Linearization (single linear approximation)  
-3. Neural Network (feedforward neural network)
-
-The analysis examines two relationships:
-- UPC Relationship: Flow rate prediction q = f(power, head) in m³/s
-- Volume-Head Relationship: Volume prediction v = f(head) in m³
-
-Key metrics calculated:
-- MAE: Mean Absolute Error (average magnitude of errors)
-- Mean Error: Systematic bias (over/under-estimation tendency)
-- Max Error: Worst-case approximation error
-- MAPE: Mean Absolute Percentage Error (relative accuracy)
-- R²: Coefficient of determination (goodness of fit)
-"""
 # %% Import libraries
 import torch
 import numpy as np
 import dill as pickle
 import pandas as pd
 import sys
+from pathlib import Path
 
 device = torch.device("cpu")
+script_dir = Path(__file__).parent
 
 # load portfolio data
 sys.path.append('../Library')
@@ -33,48 +16,20 @@ load_portfolio_data()
 from V_H_relations import r, m, head_max, head_min, h_dead_up, h_normal_up, height_up, R, height_low, n, h_dead_low, h_normal_low, max_vol_up, max_vol_low, max_vol, ramp_down, ramp_up, min_vol_low, target_vol_up, target_vol_low, target_head
 
 # load preprocessed functions & data
-with open('../preprocess.pkl', 'rb') as f:
+with open(script_dir.parent / 'preprocess.pkl', 'rb') as f:
     v_low_h_coeffs, h_v_coeffs, v_low_to_h_fitted, v_low_h_poly, h_v_coeffs_lin, coefs_tur_lin, intercept_tur_lin, coefs_pump_lin, intercept_pump_lin, predict_q_linear_tur, predict_q_linear_pump, h_to_v_low_lin, h_fit, neg_min_fit, neg_max_fit, pos_min_fit, pos_max_fit, h_v_poly, h_v_coeffs, DA_price_hour, DA_price_quarter, h_to_v_low_fitted, predict_q_poly, neg_min, neg_max, pos_min, pos_max, prepare_and_fit_model, get_UPC_bound, LR_UPC_bound = pickle.load(f)
 
 # %% Error Analysis
 import os
 from sklearn.metrics import r2_score, mean_absolute_error
-import glob
 
 # Load the existing datasets
 print("Loading existing datasets...")
-piecewise_data = pd.read_csv('./preliminary_results/piecewise_operation_data_SOS2_2024_10seg.csv')
-global_data = pd.read_csv('./preliminary_results/database_no_piecewise_2024.csv')
+piecewise_data = pd.read_csv(script_dir / 'preliminary_results/piecewise_operation_data_SOS2_2024_10seg.csv')
+global_data = pd.read_csv(script_dir / 'preliminary_results/database_no_piecewise_2024.csv')
 
 print(f"Piecewise data shape: {piecewise_data.shape}")
 print(f"Global data shape: {global_data.shape}")
-
-def load_nn_mpc_data():
-    """Load all Neural Network MPC results from the NN-MPC directory"""
-    nn_files = glob.glob('./preliminary_results/NN-MPC/*_detailed.csv')
-    
-    if not nn_files:
-        print("No NN-MPC files found in ./preliminary_results/NN-MPC/")
-        return pd.DataFrame()
-    
-    print(f"Found {len(nn_files)} NN-MPC files")
-    
-    all_nn_data = []
-    for file in nn_files:
-        try:
-            df = pd.read_csv(file)
-            if 'date' not in df.columns:
-                date_str = os.path.basename(file).split('_')[0]
-                df['date'] = date_str
-            all_nn_data.append(df)
-        except Exception as e:
-            print(f"Error loading {file}: {e}")
-    
-    return pd.concat(all_nn_data, ignore_index=True) if all_nn_data else pd.DataFrame()
-
-# Load NN data
-print("\nLoading Neural Network MPC data...")
-nn_data = load_nn_mpc_data()
 
 def clean_near_zero_values(data, threshold=0.2):
     """Set Power and Flow values between -threshold and +threshold to 0"""
@@ -98,8 +53,6 @@ def clean_near_zero_values(data, threshold=0.2):
 print("\nCleaning datasets...")
 piecewise_data = clean_near_zero_values(piecewise_data)
 global_data = clean_near_zero_values(global_data)
-if not nn_data.empty:
-    nn_data = clean_near_zero_values(nn_data)
 
 def calculate_essential_errors(actual, predicted, units=""):
     """Calculate essential error metrics as relative errors with % units"""
@@ -304,14 +257,6 @@ piecewise_vh = calculate_vh_errors(piecewise_data, "Piecewise Linearization")
 global_upc = calculate_upc_errors(global_data, "Global Linearization")
 global_vh = calculate_vh_errors(global_data, "Global Linearization")
 
-if not nn_data.empty:
-    nn_upc = calculate_upc_errors(nn_data, "Neural Network MPC")
-    nn_vh = calculate_vh_errors(nn_data, "Neural Network MPC")
-else:
-    print("\nWarning: No Neural Network MPC data available")
-    nn_upc = {k: np.nan for k in ['MAE', 'Mean_Error', 'Max_Error', 'MAPE', 'R2']}
-    nn_vh = {k: np.nan for k in ['MAE', 'Mean_Error', 'Max_Error', 'MAPE', 'R2']}
-
 def format_metric(value, metric_type='regular', units=''):
     """Format metric value with appropriate precision and units"""
     if pd.isna(value) or np.isnan(value):
@@ -336,7 +281,6 @@ Method & MAE (\\%) & Mean Error (\\%) & Max Error (\\%) & MAPE (\\%) & R² \\\\
 \\hline
 Piecewise Linearization & {format_metric(piecewise_upc['MAE'], 'percentage')} & {format_metric(piecewise_upc['Mean_Error'], 'percentage')} & {format_metric(piecewise_upc['Max_Error'], 'percentage')} & {format_metric(piecewise_upc['MAPE'], 'percentage')} & {format_metric(piecewise_upc['R2'], 'r2')} \\\\
 Global Linearization & {format_metric(global_upc['MAE'], 'percentage')} & {format_metric(global_upc['Mean_Error'], 'percentage')} & {format_metric(global_upc['Max_Error'], 'percentage')} & {format_metric(global_upc['MAPE'], 'percentage')} & {format_metric(global_upc['R2'], 'r2')} \\\\
-Neural Network MPC & {format_metric(nn_upc['MAE'], 'percentage')} & {format_metric(nn_upc['Mean_Error'], 'percentage')} & {format_metric(nn_upc['Max_Error'], 'percentage')} & {format_metric(nn_upc['MAPE'], 'percentage')} & {format_metric(nn_upc['R2'], 'r2')} \\\\
 \\hline
 \\end{{tabular}}
 \\caption{{UPC Relationship Error Analysis: Flow Rate Prediction Accuracy (Relative Errors)}}
@@ -351,7 +295,6 @@ Method & MAE (\\%) & Mean Error (\\%) & Max Error (\\%) & MAPE (\\%) & R² \\\\
 \\hline
 Piecewise Linearization & {format_metric(piecewise_vh['MAE'], 'percentage')} & {format_metric(piecewise_vh['Mean_Error'], 'percentage')} & {format_metric(piecewise_vh['Max_Error'], 'percentage')} & {format_metric(piecewise_vh['MAPE'], 'percentage')} & {format_metric(piecewise_vh['R2'], 'r2')} \\\\
 Global Linearization & {format_metric(global_vh['MAE'], 'percentage')} & {format_metric(global_vh['Mean_Error'], 'percentage')} & {format_metric(global_vh['Max_Error'], 'percentage')} & {format_metric(global_vh['MAPE'], 'percentage')} & {format_metric(global_vh['R2'], 'r2')} \\\\
-Neural Network MPC & {format_metric(nn_vh['MAE'], 'percentage')} & {format_metric(nn_vh['Mean_Error'], 'percentage')} & {format_metric(nn_vh['Max_Error'], 'percentage')} & {format_metric(nn_vh['MAPE'], 'percentage')} & {format_metric(nn_vh['R2'], 'r2')} \\\\
 \\hline
 \\end{{tabular}}
 \\caption{{Volume-Head Relationship Error Analysis: Volume Prediction Accuracy (Relative Errors)}}
@@ -365,42 +308,6 @@ print("\nUPC RELATIONSHIP ERROR TABLE:")
 print(upc_table)
 print("\nVOLUME-HEAD RELATIONSHIP ERROR TABLE:")
 print(vh_table)
-
-# Summary analysis
-print("\n" + "="*80)
-print("PERFORMANCE SUMMARY:")
-print("="*80)
-
-methods = ["Piecewise Linearization", "Global Linearization", "Neural Network MPC"]
-upc_errors = [piecewise_upc, global_upc, nn_upc]
-vh_errors = [piecewise_vh, global_vh, nn_vh]
-
-# Find best performing methods
-print("\nBest performing methods:")
-for metric in ['MAE', 'MAPE', 'R2']:
-    print(f"\n{metric}:")
-    
-    # UPC relationship
-    upc_values = [err[metric] for err in upc_errors]
-    valid_upc = [(i, val) for i, val in enumerate(upc_values) if not (pd.isna(val) or np.isnan(val))]
-    
-    if valid_upc:
-        if metric == 'R2':
-            best_upc_idx = max(valid_upc, key=lambda x: x[1])[0]
-        else:
-            best_upc_idx = min(valid_upc, key=lambda x: x[1])[0]
-        print(f"  UPC Best: {methods[best_upc_idx]}")
-    
-    # Volume-Head relationship
-    vh_values = [err[metric] for err in vh_errors]
-    valid_vh = [(i, val) for i, val in enumerate(vh_values) if not (pd.isna(val) or np.isnan(val))]
-    
-    if valid_vh:
-        if metric == 'R2':
-            best_vh_idx = max(valid_vh, key=lambda x: x[1])[0]
-        else:
-            best_vh_idx = min(valid_vh, key=lambda x: x[1])[0]
-        print(f"  V-H Best: {methods[best_vh_idx]}")
 
 print("\n" + "="*80)
 print("ANALYSIS COMPLETE")

@@ -1,0 +1,204 @@
+"""
+Utility helper functions for DFL.
+
+This module contains common utility functions used across the DFL framework.
+"""
+
+import torch
+import sys
+
+
+def hourly_to_quarterly(tensor_data):
+    """
+    Convert hourly data to quarterly (15-minute) data by repeating each value 4 times.
+
+    Args:
+        tensor_data: Tensor with hourly data
+
+    Returns:
+        Tensor with quarterly data (4x longer)
+    """
+    return tensor_data.repeat_interleave(4)
+
+
+def setup_device():
+    """
+    Setup and return the PyTorch device.
+
+    Returns:
+        torch.device: CPU or CUDA device
+    """
+    # Use CPU for now (can be changed to support CUDA if needed)
+    device = torch.device("cpu")
+    return device
+
+
+def load_portfolio_data(library_path=None):
+    """
+    Load portfolio data from the Library module.
+
+    Args:
+        library_path: Path to the Library directory. If None, will auto-detect.
+
+    Returns:
+        dict: Dictionary containing portfolio parameters
+    """
+    import os
+    from pathlib import Path
+
+    # Auto-detect library path if not provided
+    if library_path is None:
+        # Try to find Library directory relative to this file
+        current_file = Path(__file__).resolve()
+        repo_root = current_file.parent.parent.parent  # DFL/utils/helpers.py -> DFL-for-UPHES/
+        library_path = repo_root / "Library"
+
+        if not library_path.exists():
+            # Fallback: try ../Library from current working directory
+            library_path = Path("../Library").resolve()
+
+    library_path = str(library_path)
+    if library_path not in sys.path:
+        sys.path.append(library_path)
+
+    try:
+        from V_H_relations import load_portfolio_data as load_portfolio
+        load_portfolio()
+
+        # Import all the parameters
+        from V_H_relations import (
+            r, m, head_max, head_min, h_dead_up, h_normal_up, height_up, R,
+            height_low, n, h_dead_low, h_normal_low, max_vol_up, max_vol_low,
+            max_vol, ramp_down, ramp_up, min_vol_low, target_vol_up,
+            target_vol_low, target_head, gross_head
+        )
+
+        return {
+            'r': r, 'm': m, 'head_max': head_max, 'head_min': head_min,
+            'h_dead_up': h_dead_up, 'h_normal_up': h_normal_up, 'height_up': height_up,
+            'R': R, 'height_low': height_low, 'n': n, 'h_dead_low': h_dead_low,
+            'h_normal_low': h_normal_low, 'max_vol_up': max_vol_up,
+            'max_vol_low': max_vol_low, 'max_vol': max_vol,
+            'ramp_down': ramp_down, 'ramp_up': ramp_up, 'min_vol_low': min_vol_low,
+            'target_vol_up': target_vol_up, 'target_vol_low': target_vol_low,
+            'target_head': target_head, 'gross_head': gross_head
+        }
+
+    except ImportError as e:
+        print(f"Warning: Could not load portfolio data: {e}")
+        return None
+
+
+def load_preprocessed_data(preprocess_file=None):
+    """
+    Load preprocessed functions and data from pickle file.
+
+    Args:
+        preprocess_file: Path to the preprocess.pkl file. If None, will auto-detect.
+
+    Returns:
+        dict: Dictionary containing all preprocessed data and functions
+    """
+    import dill as pickle
+    from pathlib import Path
+    import builtins
+
+    # Auto-detect preprocess file path if not provided
+    if preprocess_file is None:
+        # Try to find preprocess.pkl relative to this file
+        current_file = Path(__file__).resolve()
+        repo_root = current_file.parent.parent.parent  # DFL/utils/helpers.py -> DFL-for-UPHES/
+        preprocess_file = repo_root / "preprocess.pkl"
+
+        if not preprocess_file.exists():
+            # Fallback: try ../preprocess.pkl from current working directory
+            preprocess_file = Path("../preprocess.pkl").resolve()
+
+    # Import torch globally so pickled functions can access it
+    if not hasattr(builtins, 'torch'):
+        builtins.torch = torch
+
+    try:
+        with open(str(preprocess_file), 'rb') as f:
+            data = pickle.load(f)
+
+        # Data is a tuple, unpack it
+        (v_low_h_coeffs, h_v_coeffs, v_low_to_h_fitted, v_low_h_poly, h_vlow_coeff_lin,
+         coefs_tur_lin, intercept_tur_lin, coefs_pump_lin, intercept_pump_lin,
+         predict_q_linear_tur, predict_q_linear_pump, h_to_v_low_lin, h_fit,
+         neg_min_fit, neg_max_fit, pos_min_fit, pos_max_fit, h_v_poly, h_v_coeffs_dup,
+         DA_price_hour, DA_price_quarter, h_to_v_low_fitted, predict_q_poly,
+         neg_min, neg_max, pos_min, pos_max, prepare_and_fit_model,
+         get_UPC_bound, LR_UPC_bound) = data
+
+        # Make variables available globally for pickled functions
+        # These are accessed by pickled lambda and closure functions
+        builtins.h_v_coeffs = h_v_coeffs_dup
+        builtins.h_v_coeffs_orig = h_v_coeffs  # Also set the original name just in case
+        builtins.v_low_h_coeffs = v_low_h_coeffs
+        builtins.device = torch.device("cpu")
+        builtins.torch = torch  # Ensure torch is always available
+
+        # Import all commonly needed items into builtins
+        import numpy as np
+        builtins.np = np
+
+        return {
+            'v_low_h_coeffs': v_low_h_coeffs,
+            'h_v_coeffs': h_v_coeffs,
+            'v_low_to_h_fitted': v_low_to_h_fitted,
+            'v_low_h_poly': v_low_h_poly,
+            'h_vlow_coeff_lin': h_vlow_coeff_lin,
+            'coefs_tur_lin': coefs_tur_lin,
+            'intercept_tur_lin': intercept_tur_lin,
+            'coefs_pump_lin': coefs_pump_lin,
+            'intercept_pump_lin': intercept_pump_lin,
+            'predict_q_linear_tur': predict_q_linear_tur,
+            'predict_q_linear_pump': predict_q_linear_pump,
+            'h_to_v_low_lin': h_to_v_low_lin,
+            'h_fit': h_fit,
+            'neg_min_fit': neg_min_fit,
+            'neg_max_fit': neg_max_fit,
+            'pos_min_fit': pos_min_fit,
+            'pos_max_fit': pos_max_fit,
+            'h_v_poly': h_v_poly,
+            'h_v_coeffs': h_v_coeffs,
+            'DA_price_hour': DA_price_hour,
+            'DA_price_quarter': DA_price_quarter,
+            'h_to_v_low_fitted': h_to_v_low_fitted,
+            'predict_q_poly': predict_q_poly,
+            'neg_min': neg_min,
+            'neg_max': neg_max,
+            'pos_min': pos_min,
+            'pos_max': pos_max,
+            'prepare_and_fit_model': prepare_and_fit_model,
+            'get_UPC_bound': get_UPC_bound,
+            'LR_UPC_bound': LR_UPC_bound
+        }
+
+    except Exception as e:
+        print(f"Warning: Could not load preprocessed data: {e}")
+        return None
+
+
+def initialize_head_and_volume(h_to_v_low_fitted, device=None):
+    """
+    Initialize head and volume values.
+
+    Args:
+        h_to_v_low_fitted: Fitted function to convert head to lower volume
+        device: PyTorch device
+
+    Returns:
+        tuple: (head_init, v_low_init) as tensors
+    """
+    if device is None:
+        device = torch.device("cpu")
+
+    head_init = torch.tensor(77.0, device=device, dtype=torch.float32)
+    # Extract scalar value to avoid PyTorch tensor construction warning
+    v_low_init = torch.tensor(h_to_v_low_fitted(77.0).item(), device=device, dtype=torch.float32)
+
+    print(f"Initial head: {head_init.item()}, Initial v_low: {v_low_init.item()}")
+
+    return head_init, v_low_init

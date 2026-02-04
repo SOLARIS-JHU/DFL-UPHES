@@ -2,15 +2,11 @@
 # Initialization
 import torch
 import dill as pickle
-import cvxpy as cp
 import numpy as np
 import pandas as pd
-import sympy as sp
 from pathlib import Path
 import matplotlib.pyplot as plt
-from cvxpylayers.torch import CvxpyLayer
 import sys
-from mpl_toolkits.mplot3d import Axes3D
 from sklearn.preprocessing import PolynomialFeatures
 from sklearn.linear_model import LinearRegression
 from sklearn.pipeline import make_pipeline
@@ -162,13 +158,13 @@ def plot_UPC_boundaries(boundaries_neg, boundaries_pos, h_fit, p_neg_min_fit, p_
     ax.set_title('Actual and Fitted Data Regions in p-h Space')
 
     # Show plot
-    plt.show()
+    # plt.show()  # visualization disabled
 
 # If this script is the main entry point, execute the plot function
 if __name__ == '__main__':
     boundaries_neg, boundaries_pos = get_UPC_bound()
     h_fit, neg_min_fit, neg_max_fit, pos_min_fit, pos_max_fit = LR_UPC_bound(boundaries_neg, boundaries_pos)
-    plot_UPC_boundaries(boundaries_neg, boundaries_pos, h_fit, neg_min_fit, neg_max_fit, pos_min_fit, pos_max_fit)
+    # plot_UPC_boundaries(boundaries_neg, boundaries_pos, h_fit, neg_min_fit, neg_max_fit, pos_min_fit, pos_max_fit)  # visualization disabled
 
 # neg_min_line = np.polyval(neg_min_fit, h_fit)
 
@@ -309,7 +305,7 @@ def plot_poly_UPC_boundaries(boundaries_neg, boundaries_pos, h_poly_fit, poly_ne
     ax.set_ylabel('Head h')
     ax.set_title('Polynomial Fit of UPC Boundaries in p-h Space')
 
-    plt.show()
+    # plt.show()  # visualization disabled
 
 # Load the UPC boundary data
 boundaries_neg, boundaries_pos = get_UPC_bound()
@@ -361,14 +357,14 @@ if __name__ == '__main__':
     min_pos_power = pos_min(head_example)
     max_pos_power = pos_max(head_example)
 
-    print(f"Head: {head_example}")
-    print(f"Minimum Negative Power: {min_neg_power}")
-    print(f"Maximum Negative Power: {max_neg_power}")
-    print(f"Minimum Positive Power: {min_pos_power}")
-    print(f"Maximum Positive Power: {max_pos_power}")
+    # print(f"Head: {head_example}")
+    # print(f"Minimum Negative Power: {min_neg_power}")
+    # print(f"Maximum Negative Power: {max_neg_power}")
+    # print(f"Minimum Positive Power: {min_pos_power}")
+    # print(f"Maximum Positive Power: {max_pos_power}")
 
     # Plot the results using the polynomial fitted boundaries
-    plot_poly_UPC_boundaries(boundaries_neg, boundaries_pos, h_poly_fit, poly_neg_min_fit, poly_neg_max_fit, poly_pos_min_fit, poly_pos_max_fit)
+    # plot_poly_UPC_boundaries(boundaries_neg, boundaries_pos, h_poly_fit, poly_neg_min_fit, poly_neg_max_fit, poly_pos_min_fit, poly_pos_max_fit)  # visualization disabled
 
 # neg_min_line = np.polyval(neg_min_fit, h_fit)
 
@@ -407,9 +403,9 @@ h_values_tensor = torch.tensor(h_values, dtype=torch.float32, device=device)
 v_low_pred_tensor = h_to_v_low_fitted(h_values_tensor)
 v_low_pred = v_low_pred_tensor.cpu().numpy()  # Convert back to numpy for plotting
 
-# Print fitted function
-print("Fitted function form:")
-print("v_low =", h_v_poly)
+# Print fitted function (disabled)
+# print("Fitted function form:")
+# print("v_low =", h_v_poly)
 
 # Calculate residuals, R-squared and Adjusted R-squared
 residuals = v_low_range - v_low_pred
@@ -418,26 +414,26 @@ reduced_chi_squared = chi_squared / (len(v_low_range) - (degree + 1))
 r_squared = np.corrcoef(v_low_range, v_low_pred)[0, 1]**2
 adjusted_r_squared = 1 - (1 - r_squared) * (len(v_low_range) - 1) / (len(v_low_range) - (degree + 1) - 1)
 
-# Print index
-print("Reduced Chi-Square:", reduced_chi_squared)
-print("R-Square (COD):", r_squared)
-print("Adjusted R-Square:", adjusted_r_squared)
+# Print index (disabled)
+# print("Reduced Chi-Square:", reduced_chi_squared)
+# print("R-Square (COD):", r_squared)
+# print("Adjusted R-Square:", adjusted_r_squared)
 
-# plot
-plt.figure(figsize=(6, 6))
-plt.plot(h_values, v_low_range, '-', alpha=0.7, label='Original data')
-plt.plot(h_values, v_low_pred, '-', alpha=0.7, label='Fitted curve')
-plt.xlabel('head')
-plt.ylabel('v_low')
-plt.title('V_Low vs. Head Polynomial Fitting')
-plt.legend()
-plt.show()
+# plot (disabled)
+# plt.figure(figsize=(6, 6))
+# plt.plot(h_values, v_low_range, '-', alpha=0.7, label='Original data')
+# plt.plot(h_values, v_low_pred, '-', alpha=0.7, label='Fitted curve')
+# plt.xlabel('head')
+# plt.ylabel('v_low')
+# plt.title('V_Low vs. Head Polynomial Fitting')
+# plt.legend()
+# plt.show()
 
 
 
-# test
-print(h_to_v_low_fitted(torch.tensor(99, device=device)))
-print(h_to_v_low_fitted(torch.tensor(50, device=device)))
+# test (disabled)
+# print(h_to_v_low_fitted(torch.tensor(99, device=device)))
+# print(h_to_v_low_fitted(torch.tensor(50, device=device)))
 
 # %% Fit v_low-to-h data (inverse of h-to-v_low data)
 # Fit v_low-to-h data (UPCs data is fit by Origin)
@@ -472,9 +468,9 @@ v_low_range_tensor = torch.tensor(v_low_range, dtype=torch.float32, device=devic
 h_pred_tensor = v_low_to_h_fitted(v_low_range_tensor)
 h_pred = h_pred_tensor.cpu().numpy()  # Convert back to numpy for plotting
 
-# Print fitted function
-print("Fitted function form:")
-print("h =", v_low_h_poly)
+# Print fitted function (disabled)
+# print("Fitted function form:")
+# print("h =", v_low_h_poly)
 
 # Calculate residuals, R-squared and Adjusted R-squared
 residuals_inverse = h_values - h_pred
@@ -483,32 +479,32 @@ reduced_chi_squared_inverse = chi_squared_inverse / (len(h_values) - (degree_inv
 r_squared_inverse = np.corrcoef(h_values, h_pred)[0, 1]**2
 adjusted_r_squared_inverse = 1 - (1 - r_squared_inverse) * (len(h_values) - 1) / (len(h_values) - (degree_inverse + 1) - 1)
 
-# Print index
-print("Reduced Chi-Square:", reduced_chi_squared_inverse)
-print("R-Square (COD):", r_squared_inverse)
-print("Adjusted R-Square:", adjusted_r_squared_inverse)
+# Print index (disabled)
+# print("Reduced Chi-Square:", reduced_chi_squared_inverse)
+# print("R-Square (COD):", r_squared_inverse)
+# print("Adjusted R-Square:", adjusted_r_squared_inverse)
 
-# plot
-plt.figure(figsize=(6, 6))
-plt.plot(v_low_range, h_values, '-', alpha=0.7, label='Original data')
-plt.plot(v_low_range, h_pred, '-', alpha=0.7, label='Fitted curve')
-plt.xlabel('v_low')
-plt.ylabel('head')
-plt.title('Head vs. V_Low Polynomial Fitting (Inverse)')
-plt.legend()
-plt.show()
+# plot (disabled)
+# plt.figure(figsize=(6, 6))
+# plt.plot(v_low_range, h_values, '-', alpha=0.7, label='Original data')
+# plt.plot(v_low_range, h_pred, '-', alpha=0.7, label='Fitted curve')
+# plt.xlabel('v_low')
+# plt.ylabel('head')
+# plt.title('Head vs. V_Low Polynomial Fitting (Inverse)')
+# plt.legend()
+# plt.show()
 
-# Test the function
-print("Testing v_low_to_h_fitted with a sample value:")
-print(v_low_to_h_fitted(588000))  # Example value within the range
+# Test the function (disabled)
+# print("Testing v_low_to_h_fitted with a sample value:")
+# print(v_low_to_h_fitted(588000))  # Example value within the range
 
 # Test inverse relationship
 test_v1 = h_to_v_low_fitted(99)
 test_v2 = h_to_v_low_fitted(50)
-print(f"v_low corresponding to h=99: {test_v1}")
-print(f"v_low corresponding to h=50: {test_v2}")
-print(f"h corresponding to v_low={test_v1}: {v_low_to_h_fitted(test_v1)}")
-print(f"h corresponding to v_low={test_v2}: {v_low_to_h_fitted(test_v2)}")
+# print(f"v_low corresponding to h=99: {test_v1}")
+# print(f"v_low corresponding to h=50: {test_v2}")
+# print(f"h corresponding to v_low={test_v1}: {v_low_to_h_fitted(test_v1)}")
+# print(f"h corresponding to v_low={test_v2}: {v_low_to_h_fitted(test_v2)}")
 
 # %% Fit UPC data (outside pipeline)
 # Fit UPC data (outside pipeline)
@@ -580,7 +576,7 @@ def plot_3d_surface_interactive(x_valid, y_valid, z_valid, model, title):
         )
     )
 
-    fig.show()
+    # fig.show()  # visualization disabled
 
 def print_model_formula(coefs, intercept, feature_names):
     terms = [f"{coef:.2f}*{name}" for coef, name in zip(coefs, feature_names)]
@@ -595,17 +591,17 @@ if __name__ == '__main__':
     results_turbine = prepare_and_fit_model('./Data/UPCs/temp/Mod_Francis_turbine_temp.xlsx')
     
     # Plot the fitted models
-    plot_3d_surface_interactive(*results_pump[1:4], results_pump[0], 'Pump Model')
-    plot_3d_surface_interactive(*results_turbine[1:4], results_turbine[0], 'Turbine Model')
+    # plot_3d_surface_interactive(*results_pump[1:4], results_pump[0], 'Pump Model')  # visualization disabled
+    # plot_3d_surface_interactive(*results_turbine[1:4], results_turbine[0], 'Turbine Model')  # visualization disabled
 
     # Print statistical measures and formulas
-    print("Pump Model - R^2: {:f}, Adjusted R^2: {:f}, Reduced Chi-Squared: {:f}".format(results_pump[4], results_pump[5], results_pump[6]))
-    print("Pump Model Formula:")
-    print(print_model_formula(results_pump[7], results_pump[8], results_pump[9]))
+    # print("Pump Model - R^2: {:f}, Adjusted R^2: {:f}, Reduced Chi-Squared: {:f}".format(results_pump[4], results_pump[5], results_pump[6]))
+    # print("Pump Model Formula:")
+    # print(print_model_formula(results_pump[7], results_pump[8], results_pump[9]))
     
-    print("Turbine Model - R^2: {:f}, Adjusted R^2: {:f}, Reduced Chi-Squared: {:f}".format(results_turbine[4], results_turbine[5], results_turbine[6]))
-    print("Turbine Model Formula:")
-    print(print_model_formula(results_turbine[7], results_turbine[8], results_turbine[9]))
+    # print("Turbine Model - R^2: {:f}, Adjusted R^2: {:f}, Reduced Chi-Squared: {:f}".format(results_turbine[4], results_turbine[5], results_turbine[6]))
+    # print("Turbine Model Formula:")
+    # print(print_model_formula(results_turbine[7], results_turbine[8], results_turbine[9]))
 
     # Convert coefficients and intercepts to PyTorch tensors
     coefs_tur = torch.tensor(results_turbine[7], dtype=torch.float32, device=device)
@@ -679,7 +675,7 @@ if __name__ == '__main__':
 
     # Predict the flow q
     q_predicted = predict_q_poly(p_example, h_example)
-    print(f"Predicted flow (q) for p={p_example.tolist()}, h={h_example.tolist()}:\n{q_predicted.tolist()}")
+    # print(f"Predicted flow (q) for p={p_example.tolist()}, h={h_example.tolist()}:\n{q_predicted.tolist()}")
 
 # %% Fit h-v_low data (linear)
 # Fit h-v_low data (linear)
@@ -707,19 +703,20 @@ r_squared_lin = np.corrcoef(v_low_range_lin, v_low_pred_lin)[0, 1]**2
 adjusted_r_squared_lin = 1 - (1 - r_squared_lin) * (len(v_low_range_lin) - 1) / (len(v_low_range_lin) - (degree_lin + 1) - 1)
 
 # Print index
-print("Reduced Chi-Square:", reduced_chi_squared_lin)
-print("R-Square (COD):", r_squared_lin)
-print("Adjusted R-Square:", adjusted_r_squared_lin)
+# prints disabled
+# print("Reduced Chi-Square:", reduced_chi_squared_lin)
+# print("R-Square (COD):", r_squared_lin)
+# print("Adjusted R-Square:", adjusted_r_squared_lin)
 
-# plot
-plt.figure(figsize=(6, 6))
-plt.plot(h_values, v_low_range, '-', alpha=0.7, label='Original data')
-plt.plot(h_values_lin, v_low_pred_lin, '-', alpha=0.7, label='Fitted curve')
-plt.xlabel('head')
-plt.ylabel('v_low')
-plt.title('V_Low vs. Head Polynomial Fitting (Linear)')
-plt.legend()
-plt.show()
+# plot (disabled)
+# plt.figure(figsize=(6, 6))
+# plt.plot(h_values, v_low_range, '-', alpha=0.7, label='Original data')
+# plt.plot(h_values_lin, v_low_pred_lin, '-', alpha=0.7, label='Fitted curve')
+# plt.xlabel('head')
+# plt.ylabel('v_low')
+# plt.title('V_Low vs. Head Polynomial Fitting (Linear)')
+# plt.legend()
+# plt.show()
 
 def h_to_v_low_lin(head=None):
     return h_v_poly_lin(head)
@@ -745,17 +742,17 @@ if __name__ == '__main__':
     results_turbine_linear = prepare_and_fit_model_linear('./Data/UPCs/temp/Mod_Francis_turbine_temp.xlsx')
     
     # Plot the fitted models
-    plot_3d_surface_interactive(*results_pump_linear[1:4], results_pump_linear[0], 'Pump Model (Linear)')
-    plot_3d_surface_interactive(*results_turbine_linear[1:4], results_turbine_linear[0], 'Turbine Model (Linear)')
+    # plot_3d_surface_interactive(*results_pump_linear[1:4], results_pump_linear[0], 'Pump Model (Linear)')  # visualization disabled
+    # plot_3d_surface_interactive(*results_turbine_linear[1:4], results_turbine_linear[0], 'Turbine Model (Linear)')  # visualization disabled
 
     # Print statistical measures and formulas
-    print("Pump Model (Linear) - R^2: {:f}, Adjusted R^2: {:f}, Reduced Chi-Squared: {:f}".format(results_pump_linear[4], results_pump_linear[5], results_pump_linear[6]))
-    print("Pump Model Formula (Linear):")
-    print(print_model_formula(results_pump_linear[7], results_pump_linear[8], results_pump_linear[9]))
+    # print("Pump Model (Linear) - R^2: {:f}, Adjusted R^2: {:f}, Reduced Chi-Squared: {:f}".format(results_pump_linear[4], results_pump_linear[5], results_pump_linear[6]))
+    # print("Pump Model Formula (Linear):")
+    # print(print_model_formula(results_pump_linear[7], results_pump_linear[8], results_pump_linear[9]))
     
-    print("Turbine Model (Linear) - R^2: {:f}, Adjusted R^2: {:f}, Reduced Chi-Squared: {:f}".format(results_turbine_linear[4], results_turbine_linear[5], results_turbine_linear[6]))
-    print("Turbine Model Formula (Linear):")
-    print(print_model_formula(results_turbine_linear[7], results_turbine_linear[8], results_turbine_linear[9]))
+    # print("Turbine Model (Linear) - R^2: {:f}, Adjusted R^2: {:f}, Reduced Chi-Squared: {:f}".format(results_turbine_linear[4], results_turbine_linear[5], results_turbine_linear[6]))
+    # print("Turbine Model Formula (Linear):")
+    # print(print_model_formula(results_turbine_linear[7], results_turbine_linear[8], results_turbine_linear[9]))
 
     # Convert coefficients and intercepts to PyTorch tensors
     coefs_tur_linear = torch.tensor(results_turbine_linear[7], dtype=torch.float32, device=device)
@@ -803,8 +800,8 @@ if __name__ == '__main__':
     h_example = torch.tensor([78, 67, 91], dtype=torch.float32, device=device)
     q_predicted_tur = predict_q_linear_tur(p_example, h_example)
     q_predicted_pump = predict_q_linear_pump(p_example, h_example)
-    print(f"Predicted flow (q) for p={p_example.tolist()}, h={h_example.tolist()} (Turbine):\n{q_predicted_tur.tolist()}")
-    print(f"Predicted flow (q) for p={p_example.tolist()}, h={h_example.tolist()} (Pump):\n{q_predicted_pump.tolist()}")
+    # print(f"Predicted flow (q) for p={p_example.tolist()}, h={h_example.tolist()} (Turbine):\n{q_predicted_tur.tolist()}")
+    # print(f"Predicted flow (q) for p={p_example.tolist()}, h={h_example.tolist()} (Pump):\n{q_predicted_pump.tolist()}")
 
 
 # %% 
@@ -812,5 +809,5 @@ if __name__ == '__main__':
 with open('preprocess.pkl', 'wb') as f:
     pickle.dump((v_low_h_coeffs, h_v_coeffs, v_low_to_h_fitted, v_low_h_poly, h_v_coeffs_lin, coefs_tur_lin, intercept_tur_lin, coefs_pump_lin, intercept_pump_lin, predict_q_linear_tur,predict_q_linear_pump, h_to_v_low_lin, h_fit, neg_min_fit, neg_max_fit, pos_min_fit, pos_max_fit, h_v_poly, h_v_coeffs, DA_price_hour, DA_price_quarter, h_to_v_low_fitted, predict_q_poly, neg_min, neg_max, pos_min, pos_max, prepare_and_fit_model, get_UPC_bound, LR_UPC_bound), f)
 
-print('---------------Preprocessing Completed---------------')
+# print('---------------Preprocessing Completed---------------')
 # %%
