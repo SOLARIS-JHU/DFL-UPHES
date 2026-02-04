@@ -59,22 +59,20 @@ Transform intractable UPHES scheduling into fast, accurate optimization using en
 
 ### Four DFL Variants
 
-1. **DFL-GL-RS** ⚡: Global linear approximation with LSTM (fastest, 4s per day)
-2. **DFL-PW-RS** 🎯: Piecewise SOS2 approximation with LSTM (highest accuracy, 120s per day)
-3. **DFL-PW-no-Rec** 🔬: Piecewise with 1 iteration (tests recursion impact)
-4. **DFL-PW-no-NN** 🧪: Fixed penalty weights (tests neural network impact)
+1. **DFL-GL-RS** ⚡: Global linear approximation with LSTM (fastest, real-time implementation tool)
+2. **DFL-PW-RS** 🎯: Piecewise SOS2 approximation with LSTM (highest accuracy, refinement tool)
+3. **DFL-PW-no-Rec** 🔬: Piecewise with 1 iteration (ablation study on recursion impact)
+4. **DFL-PW-no-NN** 🧪: Fixed penalty weights (ablation study on neural network impact)
 
 ---
 
 ## ⚡ Quick Start
 
-
-
 ### Installation
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/DFL-for-UPHES.git
+git clone https://github.com/SOLARIS-JHU/DFL-UPHES.git
 cd DFL-for-UPHES
 
 # Install dependencies
@@ -622,7 +620,7 @@ arXiv preprint at [https://arxiv.org/abs/2512.20880](https://arxiv.org/abs/2512.
 
 ## 📄 License
 
-This project is licensed under the MIT License. 
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
 
 ---
 
