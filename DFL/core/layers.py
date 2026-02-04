@@ -46,17 +46,32 @@ class TaylorRegressionLayer:
         """
         try:
             y = func(x)
+
+            # Ensure y is a scalar for gradient computation
+            if y.numel() == 1:
+                grad_output = torch.ones_like(y)
+            else:
+                grad_output = torch.ones_like(y)
+
             grad = torch.autograd.grad(
                 outputs=y,
                 inputs=x,
                 create_graph=create_graph,
                 retain_graph=retain_graph,
-                grad_outputs=torch.ones_like(y)
+                grad_outputs=grad_output,
+                allow_unused=True
             )[0]
+
+            # Handle case where gradient is None (no connection between input and output)
+            if grad is None:
+                grad = torch.zeros_like(x)
+
             return grad
         except Exception as e:
             print(f"Error in gradient calculation: {e}")
-            return torch.tensor(0.0, device=x.device, requires_grad=True)
+            print(f"  Input shape: {x.shape}, Input value: {x.item() if x.numel() == 1 else x}")
+            # Return zero gradient on error
+            return torch.zeros_like(x, requires_grad=False)
 
     def run_regression(self, power, head, flow=None):
         """
@@ -235,9 +250,10 @@ class OptiLayer:
         revenue = DA_price_param @ p_var
         cost = self.params.operational_cost * cp.sum_squares(p_var)
 
-        power_dev_pen = cp.sum(w_p_param @ cp.square(p_var - self.power_init))
-        head_dev_pen = cp.sum(w_h_param @ cp.square(h_var - self.head_init))
-        flow_dev_pen = cp.sum(w_q_param @ cp.square(q_var - self.flow_init))
+        # Penalty terms: element-wise multiply then sum
+        power_dev_pen = cp.sum(cp.multiply(w_p_param, cp.square(p_var - self.power_init)))
+        head_dev_pen = cp.sum(cp.multiply(w_h_param, cp.square(h_var - self.head_init)))
+        flow_dev_pen = cp.sum(cp.multiply(w_q_param, cp.square(q_var - self.flow_init)))
 
         objective = cp.Maximize(
             revenue

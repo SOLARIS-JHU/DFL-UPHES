@@ -4,24 +4,35 @@ This folder contains the full execution scripts that reproduce results from `DFL
 
 ## Available Scripts
 
-### GL (Global Linear) Variant
+### Data Generation (Run First - Both Variants)
+
+0. **`generate_noisy_data.py`** - Generate noisy training datasets
+   - **GL variant**: `python DFL/scripts/generate_noisy_data.py --variant GL --random-samples`
+   - **PW variant**: `python DFL/scripts/generate_noisy_data.py --variant PW --random-samples`
+   - Noise levels: 10%, 20%, 30%, 40%, 50%, 60%, 70%, 80%
+   - Plus random samples dataset
+   - GL data saved to: `DFL/outputs/noisy_data/MIQP_linear_results_*.csv`
+   - PW data saved to: `DFL/outputs/noisy_data/MIQP_piecewise_results_*.csv`
+   - **Note**: Both variants save to the same directory with different prefixes (no overwriting)
+
+### GL (Global Linear) Variant Training & Validation
 
 1. **`run_pretraining_gl.py`** - Full pretraining for GL variant
-   - Data: `MIQP_linear_results_*`
-   - Noise levels: 0%, 10%, 20%, 30%, 40%, 50%, 60%, 70%, 80%
+   - Data: `MIQP_linear_results_*` (from data generation step)
+   - Noise levels: 10%, 20%, 30%, 40%, 50%, 60%, 70%, 80%
    - Plus random samples dataset
    - Architecture: LSTM, 3 layers
-   - Max iterations: [1, 5]
+   - Max iterations: 7
    - Parallel: 20 workers
 
 2. **`run_validation_gl.py`** - Validation for GL variant
    - Validates all trained GL models on 2024 price scenarios
    - Tests all noise levels and configurations
 
-### PW (Piecewise) Variant
+### PW (Piecewise) Variant Training & Validation
 
 3. **`run_pretraining_pw.py`** - Full pretraining for PW variant
-   - Data: `MIQP_piecewise_results_*`
+   - Data: `MIQP_piecewise_results_*` (from data generation step)
    - Same configuration as GL
    - Uses piecewise approximation
 
@@ -36,34 +47,39 @@ This folder contains the full execution scripts that reproduce results from `DFL
 
 ## Usage
 
-### From DFL_GL-based directory:
+**All commands run from repository root**
+
+### Complete Pipeline (Recommended)
+
 ```bash
-cd DFL_GL-based
+# 1. Generate data for both variants (all from repo root)
+python DFL/scripts/generate_noisy_data.py --variant GL --random-samples
+python DFL/scripts/generate_noisy_data.py --variant PW --random-samples
 
-# Run GL pretraining
-python ../DFL/scripts/run_pretraining_gl.py
+# 2. Train models for both variants
+python DFL/scripts/run_pretraining_gl.py
+python DFL/scripts/run_pretraining_pw.py
 
-# Run GL validation
-python ../DFL/scripts/run_validation_gl.py
+# 3. Validate both variants
+python DFL/scripts/run_validation_gl.py
+python DFL/scripts/run_validation_pw.py
+
+# 4. Optional: Run ablation study
+python DFL/scripts/run_ablation_study.py
 ```
 
-### From DFL_PW-based directory:
+### Individual Steps
+
 ```bash
-cd DFL_PW-based
+# GL variant only
+python DFL/scripts/generate_noisy_data.py --variant GL --random-samples
+python DFL/scripts/run_pretraining_gl.py
+python DFL/scripts/run_validation_gl.py
 
-# Run PW pretraining
-python ../DFL/scripts/run_pretraining_pw.py
-
-# Run PW validation
-python ../DFL/scripts/run_validation_pw.py
-```
-
-### From DFL_no-NN directory:
-```bash
-cd DFL_no-NN
-
-# Run ablation study
-python ../DFL/scripts/run_ablation_study.py
+# PW variant only
+python DFL/scripts/generate_noisy_data.py --variant PW --random-samples
+python DFL/scripts/run_pretraining_pw.py
+python DFL/scripts/run_validation_pw.py
 ```
 
 ## Algorithm Fidelity
@@ -108,13 +124,13 @@ The refactored scripts use **EXACTLY the same algorithm and parameters** as the 
 - δ_q: 0.5
 - Operational cost: 0.4
 
-## Only Difference: Max Iterations
+## Configuration: Max Iterations
 
-The **ONLY** difference from the original implementations is:
-- Original: max_iterations in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-- Refactored: max_iterations in [1, 5]
+The refactored code uses optimized iteration counts selected through validation:
+- GL and PW variants: max_iterations = 7 (optimal for neural network-based DFL)
+- Ablation study (no-NN): max_iterations = 1 (no recursive refinement)
 
-All other algorithm details, parameters, and processing steps are **identical** to ensure reproducible results.
+All other algorithm details, parameters, and processing steps are **identical** to the original implementations to ensure reproducible results.
 
 ## Output Structure
 

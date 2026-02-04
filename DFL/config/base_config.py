@@ -21,10 +21,10 @@ class DFLConfig:
         # Variant identifier
         self.variant_name = "base"
 
-        # Base paths (relative to DFL_GL-based, DFL_PW-based, or ablation_no-NN folders)
-        self.miqp_base_path = "../MIQP"
-        self.library_path = "../Library"
-        self.preprocess_file = "../preprocess.pkl"
+        # Base paths (relative to repository root)
+        self.miqp_base_path = "./MIQP"
+        self.library_path = "./Library"
+        self.preprocess_file = "./preprocess.pkl"
 
         # Data file prefixes and patterns (to be set by subclasses)
         self.data_file_prefix = None
@@ -57,7 +57,7 @@ class DFLConfig:
         self.fixed_w_h = 0.1
 
         # Training settings
-        self.max_iterations = 3           # Recursive linearization iterations
+        self.max_iterations = 7           # Recursive linearization iterations
         self.penalty_growth_rate = 1.5    # Growth factor for penalty weights per iteration
         self.learning_rate = 0.001        # Adam optimizer learning rate
         self.num_epochs = 500             # Maximum training epochs
@@ -73,9 +73,11 @@ class DFLConfig:
         self.δ_q = 0.5
         self.operational_cost = 0.4
 
-        # Output directories (relative paths)
-        self.output_base_dir = "./trained_models"
-        self.results_base_dir = "./"
+        # Output directories (centralized in DFL/outputs/)
+        self.outputs_root = "./DFL/outputs"            # Root for all outputs
+        self.data_dir = "./DFL/outputs/noisy_data"     # Directory for generated noisy data
+        self.output_base_dir = "./DFL/outputs/trained_models"  # Directory for trained models
+        self.results_base_dir = "./DFL/outputs/validation_results"  # Directory for validation results
 
     def get_miqp_file_path(self):
         """
@@ -120,17 +122,19 @@ class DFLConfig:
 
     def get_results_file(self, noise_level=None, random_samples=False):
         """
-        Get results CSV file path.
+        Get results CSV file path for generated noisy data.
 
         Args:
             noise_level: Float between 0 and 1, or None
             random_samples: Boolean, whether to use random samples dataset
 
         Returns:
-            str: Path to results CSV file
+            str: Path to results CSV file in data_dir
         """
-        filename = self.get_data_file_pattern(noise_level, random_samples)
-        return os.path.join(self.results_base_dir, filename)
+        full_path = self.get_data_file_pattern(noise_level, random_samples)
+        # Extract just the filename from the full path (in case it includes directory prefixes)
+        filename = os.path.basename(full_path)
+        return os.path.join(self.data_dir, filename)
 
     def get_model_config_name(self):
         """

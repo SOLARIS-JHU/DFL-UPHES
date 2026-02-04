@@ -35,7 +35,7 @@ def pretraining_with_grid_search(config, params, device, n_jobs=20):
     # Grid search parameters
     architectures = [config.architecture] if config.use_neural_network else ['NoNN']
     num_layers_list = [config.num_layers] if config.use_neural_network else [0]
-    max_iterations_list = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    max_iterations_list = [1, 5]  # Must match original experiments
 
     # Prepare all training jobs
     all_jobs = []
@@ -54,7 +54,7 @@ def pretraining_with_grid_search(config, params, device, n_jobs=20):
             continue
 
         # Create output directory
-        source_name = config.get_data_file_pattern(noise_level=noise_level).replace('.csv', '')
+        source_name = Path(config.get_data_file_pattern(noise_level=noise_level)).stem
         root_dir = Path(config.output_base_dir) / source_name
         root_dir.mkdir(exist_ok=True, parents=True)
 
@@ -80,7 +80,7 @@ def pretraining_with_grid_search(config, params, device, n_jobs=20):
     )
 
     if random_samples_data:
-        source_name = random_samples_file.replace('.csv', '')
+        source_name = Path(random_samples_file).stem
         root_dir = Path(config.output_base_dir) / source_name
         root_dir.mkdir(exist_ok=True, parents=True)
 

@@ -9,7 +9,12 @@ This module generates noisy variants of MIQP optimization results:
 import torch
 import numpy as np
 import pandas as pd
+import os
 from copy import deepcopy
+
+# Set random seed for reproducibility
+np.random.seed(42)
+torch.manual_seed(42)
 
 
 class BaselineSimulator:
@@ -447,7 +452,7 @@ def generate_noisy_dataset(config, params, device, noise_levels=None):
         None (saves CSV files)
     """
     if noise_levels is None:
-        noise_levels = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]
+        noise_levels = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]
 
     # Load original MIQP results
     original_file = config.get_miqp_file_path()
@@ -459,43 +464,67 @@ def generate_noisy_dataset(config, params, device, noise_levels=None):
     for noise_level in noise_levels:
         print(f"\nGenerating dataset with {int(noise_level*100)}% noise...")
 
-        noise_sim = NoiseSimulator(params, relative_noise_level=noise_level)
-        results = []
+        # Set random seed for each noise level to ensure reproducibility
+        np.random.seed(42 + int(noise_level * 1000))  # Different seed for each noise level
 
-        # Process each date
-        dates = df_original['date'].unique()
-        for date in dates:
-            date_data = df_original[df_original['date'] == date].sort_values('hour')
+        # Handle 0% noise as direct copy (no simulation needed)
+        if noise_level == 0.0:
+            df_output = df_original.copy()
+        else:
+            baseline_sim = BaselineSimulator(params)
+            noise_sim = NoiseSimulator(params, relative_noise_level=noise_level)
+            results = []
 
-            if len(date_data) != 24:
-                continue
+            # Process each date
+            dates = df_original['date'].unique()
+            for date in dates:
+                date_data = df_original[df_original['date'] == date].sort_values('hour')
 
-            # Get baseline schedule
-            baseline_power = torch.tensor(date_data['power'].values, dtype=torch.float32, device=device)
-            initial_head = torch.tensor(params.head_init, dtype=torch.float32, device=device)
+                if len(date_data) != 24:
+                    continue
 
-            # Generate noisy version
-            result = noise_sim.simulate_daily_operation_with_noise(
-                baseline_power, initial_head, max_retries=50
-            )
+                # Get original power schedule
+                original_power = torch.tensor(date_data['power'].values, dtype=torch.float32, device=device)
+                initial_head = torch.tensor(params.head_init, dtype=torch.float32, device=device)
 
-            if result is not None:
-                # Create dataframe for this date
-                for hour in range(24):
-                    results.append({
-                        'date': date,
-                        'hour': hour,
-                        'power': result['p_sim'][hour].item(),
-                        'head': result['h_sim'][hour].item(),
-                        'flow': result['q_sim'][hour].item(),
-                        'price': date_data.iloc[hour]['price']
-                    })
+                # STEP 1: Run baseline simulation on original data
+                p_baseline, q_baseline, h_baseline, v_baseline = baseline_sim.simulate_daily_operation(
+                    original_power, initial_head
+                )
 
-        # Save to CSV
-        output_file = config.get_data_file_pattern(noise_level=noise_level)
-        df_output = pd.DataFrame(results)
+                # STEP 2: Apply relative noise to baseline results and re-simulate
+                result = noise_sim.simulate_daily_operation_with_noise(
+                    p_baseline, initial_head, max_retries=50
+                )
+
+                if result is not None:
+                    # Create dataframe for this date
+                    for hour in range(24):
+                        row_dict = {
+                            'date': date,
+                            'hour': hour,
+                            'power': result['p_sim'][hour].item(),
+                            'head': result['h_sim'][hour].item(),
+                            'volume': result['v_low_sim'][hour].item(),
+                            'flow': result['q_sim'][hour].item(),
+                        }
+                        # Add price if available
+                        if 'price' in date_data.columns:
+                            row_dict['price'] = date_data.iloc[hour]['price']
+                        results.append(row_dict)
+
+            df_output = pd.DataFrame(results)
+            # Reorder columns to match original format
+            cols = ['date', 'hour', 'power', 'head', 'volume', 'flow']
+            if 'price' in df_output.columns:
+                cols.append('price')
+            df_output = df_output[cols]
+
+        # Save to CSV using config-based path
+        output_file = config.get_results_file(noise_level=noise_level)
+        os.makedirs(os.path.dirname(output_file), exist_ok=True)
         df_output.to_csv(output_file, index=False)
-        print(f"Saved {len(results)} rows to {output_file}")
+        print(f"Saved {len(df_output)} rows to {output_file}")
 
 
 def generate_random_samples_dataset(config, params, device):
@@ -511,6 +540,9 @@ def generate_random_samples_dataset(config, params, device):
         None (saves CSV file)
     """
     print("\nGenerating random samples dataset...")
+
+    # Set random seed for random samples generation
+    np.random.seed(42)
 
     # Load original MIQP results
     original_file = config.get_miqp_file_path()
@@ -545,17 +577,28 @@ def generate_random_samples_dataset(config, params, device):
 
         if result is not None:
             for hour in range(24):
-                results.append({
+                row_dict = {
                     'date': date,
                     'hour': hour,
                     'power': result['p_sim'][hour].item(),
                     'head': result['h_sim'][hour].item(),
+                    'volume': result['v_low_sim'][hour].item(),
                     'flow': result['q_sim'][hour].item(),
-                    'price': date_data.iloc[hour]['price']
-                })
+                }
+                # Add price if available
+                if 'price' in date_data.columns:
+                    row_dict['price'] = date_data.iloc[hour]['price']
+                results.append(row_dict)
 
-    # Save to CSV
-    output_file = config.get_data_file_pattern(random_samples=True)
+    # Save to CSV using config-based path
     df_output = pd.DataFrame(results)
+    # Reorder columns to match original format
+    cols = ['date', 'hour', 'power', 'head', 'volume', 'flow']
+    if 'price' in df_output.columns:
+        cols.append('price')
+    df_output = df_output[cols]
+
+    output_file = config.get_results_file(random_samples=True)
+    os.makedirs(os.path.dirname(output_file), exist_ok=True)
     df_output.to_csv(output_file, index=False)
-    print(f"Saved {len(results)} rows to {output_file}")
+    print(f"Saved {len(df_output)} rows to {output_file}")

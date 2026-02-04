@@ -1,19 +1,34 @@
 #!/usr/bin/env python3
 """
-Full Ablation Study Script (No Neural Network)
+Piecewise Fixed-Weight Variant Script (No Neural Network)
 
-This script reproduces the exact ablation study from DFL_no-NN/
-using the refactored DFL framework.
+This script runs the PW-fixed-w variant using the refactored
+DFL framework and data under DFL/outputs/noisy_data.
 
-It runs validation WITHOUT neural network using fixed weights for:
+It validates using FIXED penalty weights (no neural network learning) for:
 - Noise levels: 10%, 20%, 30%, 40%, 50%, 60%, 70%, 80%
 - Random samples dataset
 - Fixed weights: w_p=0.1, w_q=0.01, w_h=0.05
-- Max iterations: [1, 5]
+- Max iterations: 7 (with recursive refinement)
 """
 
 import sys
-sys.path.append('..')
+import os
+import argparse
+import numpy as np
+import torch
+
+# Add repository root to Python path to enable DFL imports
+repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+if repo_root not in sys.path:
+    sys.path.insert(0, repo_root)
+
+# Set random seed for reproducibility
+np.random.seed(42)
+torch.manual_seed(42)
+if torch.cuda.is_available():
+    torch.cuda.manual_seed(42)
+    torch.cuda.manual_seed_all(42)
 
 from DFL.config.ablation_config import AblationConfig
 from DFL.utils.helpers import (
@@ -21,13 +36,19 @@ from DFL.utils.helpers import (
     load_preprocessed_data, initialize_head_and_volume
 )
 from DFL.core.parameters import HydroParameters
-from DFL.validation.validator import ablation_validation
+from DFL.validation.validator import comprehensive_validation
 
 
 def main():
     """Main entry point for ablation study."""
+    # Parse command-line arguments
+    parser = argparse.ArgumentParser(description='Run DFL ablation study (no neural network baseline)')
+    parser.add_argument('--price-file', type=str, default='./Data/price_data_2024.csv',
+                        help='Path to price data for validation')
+    args = parser.parse_args()
+
     print("=" * 80)
-    print("DFL Ablation Study - No Neural Network (Baseline)")
+    print("DFL Variant - Piecewise Fixed-Weight (PW-fixed-w, No Neural Network)")
     print("=" * 80)
 
     # 1. Setup device
@@ -59,6 +80,7 @@ def main():
     print(f"  Data pattern: {config.data_file_pattern}")
     print(f"  Neural network: {config.use_neural_network}")
     print(f"  Fixed weights: w_p={config.fixed_w_p}, w_q={config.fixed_w_q}, w_h={config.fixed_w_h}")
+    print(f"  Results directory: {config.results_base_dir}")
 
     # 6. Initialize HydroParameters
     params = HydroParameters(
@@ -97,16 +119,16 @@ def main():
     print("\nStarting ablation validation...")
     print("This will validate using FIXED weights (no learning)")
 
-    ablation_validation(
+    comprehensive_validation(
         config=config,
         params=params,
         device=device,
-        new_price_file="../Data/price_data_2024.csv"
+        new_price_file=args.price_file
     )
 
     print("\n" + "=" * 80)
     print("Ablation study completed!")
-    print("Results saved to: ./validation_results/ablation_study/")
+    print(f"Results saved to: {config.results_base_dir}")
     print("=" * 80)
 
 

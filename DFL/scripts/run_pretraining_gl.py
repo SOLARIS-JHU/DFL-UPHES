@@ -2,8 +2,8 @@
 """
 Full Pretraining Script for Global Linear (GL) Variant
 
-This script reproduces the exact pretraining process from DFL_GL-based/
-using the refactored DFL framework.
+This script reproduces the GL pretraining process using the refactored
+DFL framework and data under DFL/outputs/noisy_data.
 
 It trains models for:
 - Noise levels: 0%, 10%, 20%, 30%, 40%, 50%, 60%, 70%, 80%
@@ -14,12 +14,26 @@ It trains models for:
 """
 
 import sys
-sys.path.append('..')
-
+import os
+import argparse
+import numpy as np
+import torch
 import itertools
 from pathlib import Path
 from datetime import datetime
 from joblib import Parallel, delayed
+
+# Add repository root to Python path to enable DFL imports
+repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+if repo_root not in sys.path:
+    sys.path.insert(0, repo_root)
+
+# Set random seed for reproducibility
+np.random.seed(42)
+torch.manual_seed(42)
+if torch.cuda.is_available():
+    torch.cuda.manual_seed(42)
+    torch.cuda.manual_seed_all(42)
 
 # Import refactored components
 from DFL.config.gl_config import GLConfig
@@ -34,6 +48,12 @@ from DFL.training.trainer import train_single_model
 
 def main():
     """Main entry point for GL pretraining."""
+    # Parse command-line arguments
+    parser = argparse.ArgumentParser(description='Train DFL models for GL variant')
+    parser.add_argument('--n-jobs', type=int, default=20,
+                        help='Number of parallel jobs for training')
+    args = parser.parse_args()
+
     print("=" * 80)
     print("DFL Full Pretraining - Global Linear (GL) Variant")
     print("=" * 80)
@@ -70,6 +90,8 @@ def main():
     print(f"  Data pattern: {config.data_file_pattern}")
     print(f"  Architecture: {config.architecture}")
     print(f"  Num layers: {config.num_layers}")
+    print(f"  Data directory: {config.data_dir}")
+    print(f"  Output directory: {config.output_base_dir}")
 
     # 6. Initialize HydroParameters
     params = HydroParameters(
@@ -105,10 +127,10 @@ def main():
     )
 
     # 7. Define grid search parameters
-    noise_levels = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]
+    noise_levels = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]  # Excludes 0% noise
     architectures = ['LSTM']
     num_layers_list = [3]
-    max_iterations_list = [1, 5]
+    max_iterations_list = [7]  # Optimal iteration count selected from validation results
 
     # 8. Prepare all training jobs
     all_jobs = []
@@ -117,16 +139,15 @@ def main():
 
     # Process noise level databases
     for noise_level in noise_levels:
-        if noise_level == 0.0:
-            file_path = config.data_file_pattern.replace('{noise}', '00pct')
-        else:
-            file_path = config.data_file_pattern.replace('{noise}', f'{int(noise_level*100):02d}pct')
+        # Load from generated noisy data directory
+        noisy_data_path = config.get_data_file_pattern(noise_level=noise_level)
+        # Use the source data name for organizing output models (for consistency with validation)
+        source_data_path = config.get_data_file_pattern(noise_level=noise_level)
+        db_name = os.path.splitext(os.path.basename(source_data_path))[0]
 
-        source_name = file_path.replace('.csv', '')
-
-        # Load historical data
+        # Load historical data from noisy files
         historical_data = load_data_for_pretraining(
-            file_path, source_name, config, device
+            noisy_data_path, db_name, config, device
         )
 
         if not historical_data:
@@ -134,7 +155,7 @@ def main():
             continue
 
         # Create output directory
-        root_dir = Path(config.output_base_dir) / source_name
+        root_dir = Path(config.output_base_dir) / db_name
         root_dir.mkdir(exist_ok=True, parents=True)
 
         print(f"  Noise {int(noise_level*100)}%: {len(historical_data)} dates loaded")
@@ -145,19 +166,20 @@ def main():
             for date_str, date_data in historical_data.items():
                 all_jobs.append((
                     config, architecture, num_layers, max_iterations,
-                    date_str, date_data, params, device
+                    date_str, date_data, params, device, db_name
                 ))
 
     # Process random samples database
-    random_samples_file = config.random_samples_file
+    noisy_random_file = config.get_data_file_pattern(random_samples=True)
+    source_random_file = config.get_data_file_pattern(random_samples=True)
+    db_name = os.path.splitext(os.path.basename(source_random_file))[0]
 
     random_samples_data = load_data_for_pretraining(
-        random_samples_file, "MIQP_linear_results_random_samples", config, device
+        noisy_random_file, db_name, config, device
     )
 
     if random_samples_data:
-        source_name = random_samples_file.replace('.csv', '')
-        root_dir = Path(config.output_base_dir) / source_name
+        root_dir = Path(config.output_base_dir) / db_name
         root_dir.mkdir(exist_ok=True, parents=True)
 
         print(f"  Random samples: {len(random_samples_data)} dates loaded")
@@ -168,15 +190,15 @@ def main():
             for date_str, date_data in random_samples_data.items():
                 all_jobs.append((
                     config, architecture, num_layers, max_iterations,
-                    date_str, date_data, params, device
+                    date_str, date_data, params, device, db_name
                 ))
 
     print(f"\nTotal training jobs: {len(all_jobs)}")
     print(f"Configurations: {len(noise_levels) + 1} databases × {len(architectures)} archs × {len(num_layers_list)} layers × {len(max_iterations_list)} iters")
 
     # 9. Run in parallel
-    print(f"\nStarting parallel training with 20 workers...")
-    results = Parallel(n_jobs=20, verbose=1)(
+    print(f"\nStarting parallel training with {args.n_jobs} workers...")
+    results = Parallel(n_jobs=args.n_jobs, verbose=1)(
         delayed(train_single_model)(*job) for job in all_jobs
     )
 

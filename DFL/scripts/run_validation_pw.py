@@ -2,8 +2,8 @@
 """
 Full Validation Script for Piecewise (PW) Variant
 
-This script reproduces the exact validation process from DFL_PW-based/
-using the refactored DFL framework.
+This script reproduces the PW validation process using the refactored
+DFL framework and data under DFL/outputs/noisy_data.
 
 It validates trained models for:
 - Noise levels: 10%, 20%, 30%, 40%, 50%, 60%, 70%, 80%
@@ -14,7 +14,22 @@ It validates trained models for:
 """
 
 import sys
-sys.path.append('..')
+import os
+import argparse
+import numpy as np
+import torch
+
+# Add repository root to Python path to enable DFL imports
+repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+if repo_root not in sys.path:
+    sys.path.insert(0, repo_root)
+
+# Set random seed for reproducibility
+np.random.seed(42)
+torch.manual_seed(42)
+if torch.cuda.is_available():
+    torch.cuda.manual_seed(42)
+    torch.cuda.manual_seed_all(42)
 
 from DFL.config.pw_config import PWConfig
 from DFL.utils.helpers import (
@@ -27,6 +42,12 @@ from DFL.validation.validator import comprehensive_validation
 
 def main():
     """Main entry point for PW validation."""
+    # Parse command-line arguments
+    parser = argparse.ArgumentParser(description='Validate DFL models for PW variant')
+    parser.add_argument('--price-file', type=str, default='./Data/price_data_2024.csv',
+                        help='Path to price data for validation')
+    args = parser.parse_args()
+
     print("=" * 80)
     print("DFL Full Validation - Piecewise (PW) Variant")
     print("=" * 80)
@@ -59,6 +80,8 @@ def main():
     print(f"\nConfiguration: PW variant")
     print(f"  Data pattern: {config.data_file_pattern}")
     print(f"  Architecture: {config.architecture}")
+    print(f"  Model directory: {config.output_base_dir}")
+    print(f"  Results directory: {config.results_base_dir}")
 
     # 6. Initialize HydroParameters
     params = HydroParameters(
@@ -101,12 +124,12 @@ def main():
         config=config,
         params=params,
         device=device,
-        new_price_file="../Data/price_data_2024.csv"
+        new_price_file=args.price_file
     )
 
     print("\n" + "=" * 80)
     print("Validation completed!")
-    print("Results saved to: ./validation_results/")
+    print(f"Results saved to: {config.results_base_dir}")
     print("=" * 80)
 
 

@@ -1,7 +1,9 @@
-#%%!/usr/bin/env python3
+#!/usr/bin/env python3
 """
-Publication-Quality Plots for UPHES Optimization Methods
-Generate IEEE-style density plots, noise robustness analysis, and trade-off visualizations
+Publication-Quality Plots for UPHES Optimization Methods.
+Generate IEEE-style density plots, noise robustness analysis, and trade-off visualizations.
+Works from any directory - automatically finds repo root.
+Outputs to results/figures/ directory (not repo root).
 """
 
 import pandas as pd
@@ -10,6 +12,19 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 from scipy.stats import gaussian_kde
 import os
+
+#%% Helper to get repo root and handle paths from any directory
+def get_repo_root():
+    """Find repo root by looking for DFL directory."""
+    current = Path.cwd()
+    while current != current.parent:
+        if (current / 'DFL').exists():
+            return current
+        current = current.parent
+    return Path.cwd()  # Fallback to current directory
+
+REPO_ROOT = get_repo_root()
+OUTPUT_DIR = REPO_ROOT / 'results' / 'figures'
 
 # IEEE publication-quality style
 plt.rcParams.update({
@@ -39,16 +54,13 @@ LINESTYLES = {
     'MIQP-PW': '-', 'No-NN': '-', 'DFL-NR': '-'
 }
 
-# File paths
+# File paths (centralized DFL outputs)
 MIQP_PATHS = {
-    'MIQP-Linear': r'..\MIQP\MIQP_linear\MILP_global_linear_benchmark.csv',
-    'MIQP-Piecewise': r'..\MIQP\MIQP_piecewise\MIQP_piecewise_benchmark.csv'
+    'MIQP-Linear': REPO_ROOT / 'MIQP' / 'MIQP_linear' / 'MILP_global_linear_benchmark.csv',
+    'MIQP-Piecewise': REPO_ROOT / 'MIQP' / 'MIQP_piecewise' / 'MIQP_piecewise_benchmark.csv'
 }
-DFL_VALIDATION_PATH = r'..\DFL_noise\validation_results\comprehensive\master_validation_benchmarks.csv'
-ABLATION_BENCHMARK_PATH = r'..\no_NN_ablation\validation_results\ablation_study\ablation_benchmarks.csv'
-DFL_GL_ABLATION_PATH = r'..\DFL_GL_ablation\validation_results\comprehensive\master_validation_benchmarks.csv'
-EXTREME_DATE = '2024-12-12'
-
+DFL_VALIDATION_PATH = REPO_ROOT / 'DFL' / 'outputs' / 'validation_results' / 'comprehensive' / 'master_validation_benchmarks.csv'
+COMPREHENSIVE_COMPARISON_PATH = REPO_ROOT / 'results' / 'tables' / 'comprehensive_comparison.csv'
 
 # ============================================================================
 # Data Loading Functions
@@ -77,16 +89,6 @@ def load_csv_with_encoding(file_path):
     return None
 
 
-def filter_extreme_date(df, method_name=""):
-    """Filter out EXTREME_DATE records."""
-    initial_count = len(df)
-    df = df[df['Date'] != EXTREME_DATE].copy()
-    filtered_count = initial_count - len(df)
-    if filtered_count > 0:
-        print(f"  Filtered out {filtered_count} {method_name} records with EXTREME_DATE")
-    return df
-
-
 def load_miqp_data(file_path, method_name):
     """Load MIQP benchmark data."""
     if not os.path.exists(file_path):
@@ -109,7 +111,6 @@ def load_miqp_data(file_path, method_name):
 
     if 'Date' in df.columns:
         df['Date'] = df['Date'].apply(standardize_date_format)
-        df = filter_extreme_date(df, method_name)
 
     return df
 
@@ -128,13 +129,29 @@ def load_and_prepare_df(file_path, data_name):
     df = pd.read_csv(file_path)
     print(f"Loaded {len(df)} {data_name} records")
 
-    date_col = 'New_Date' if 'New_Date' in df.columns else 'Date'
-    if date_col not in df.columns:
-        print(f"Warning: No date column found in {data_name}")
-        return None
+    # Check if date columns exist and have data
+    has_date_data = False
+    date_col = None
 
-    df['Date'] = df[date_col].apply(standardize_date_format)
-    df = filter_extreme_date(df, data_name)
+    if 'New_Date' in df.columns:
+        non_null_count = df['New_Date'].notna().sum()
+        if non_null_count > 0:
+            date_col = 'New_Date'
+            has_date_data = True
+
+    if not has_date_data and 'Date' in df.columns:
+        non_null_count = df['Date'].notna().sum()
+        if non_null_count > 0:
+            date_col = 'Date'
+            has_date_data = True
+
+    # If we have a date column with data, standardize it
+    if has_date_data and date_col:
+        df['Date'] = df[date_col].apply(standardize_date_format)
+    else:
+        # No date data available (aggregated results)
+        print(f"  ℹ {data_name}: No date data found - skipping date-based filtering (aggregated results)")
+        df['Date'] = None
 
     if 'Noise_Level' in df.columns:
         df['Noise_Level_Numeric'] = pd.to_numeric(df['Noise_Level'], errors='coerce')
@@ -152,7 +169,7 @@ def get_best_config(df, method_name, config_cols):
     max_iter_col = config_cols[-1] if config_cols else None
 
     if max_iter_col and max_iter_col in random_samples_df.columns:
-        rs_valid = random_samples_df[random_samples_df[max_iter_col] != 1]
+        rs_valid = random_samples_df[random_samples_df[max_iter_col] > 1]
     else:
         rs_valid = random_samples_df
 
@@ -167,94 +184,106 @@ def get_best_config(df, method_name, config_cols):
 
 
 def load_dfl_data():
-    """Load DFL validation results and extract best configuration."""
+    """Load DFL validation results and extract best configuration for both GL and PW."""
     df = load_and_prepare_df(DFL_VALIDATION_PATH, 'DFL')
     if df is None:
         return pd.DataFrame(), pd.DataFrame(), None
 
     max_iter_col = find_column(df, ['Max_Iterations', 'Max_Iter', 'max_iteration', 'max_iter'])
-    arch_col = find_column(df, ['Architecture', 'architecture', 'arch'])
-    layers_col = find_column(df, ['Num_Layers', 'num_layers', 'layers'])
+    method_type_col = find_column(df, ['Method_Type', 'method_type'])
 
-    if not all([max_iter_col, arch_col, layers_col]):
-        print(f"Warning: Missing config columns: max_iter={max_iter_col}, arch={arch_col}, layers={layers_col}")
+    if not max_iter_col:
+        print(f"Warning: Max_Iterations column not found")
         return pd.DataFrame(), pd.DataFrame(), None
 
-    config_cols = [arch_col, layers_col, max_iter_col]
-    best_config, random_samples_df = get_best_config(df, 'DFL-RS', config_cols)
+    # Filter for iteration 7 (best configuration for GL and PW)
+    df_best = df[df[max_iter_col] == 7].copy()
 
-    if best_config is None or len(random_samples_df) == 0:
+    if df_best.empty:
+        print(f"Warning: No data found for iteration 7")
         return pd.DataFrame(), pd.DataFrame(), None
 
-    # Get best configuration data
-    mask = (random_samples_df[arch_col] == best_config[0]) & \
-           (random_samples_df[layers_col] == best_config[1]) & \
-           (random_samples_df[max_iter_col] == best_config[2])
-    best_rs_df = random_samples_df[mask].copy()
-    best_rs_df['Method'] = 'DFL-RS'
+    # SEPARATE GL-based and PW-based DFL
+    df_gl = pd.DataFrame()
+    df_pw = pd.DataFrame()
+    df_no_nn = pd.DataFrame()
 
-    # Get NoRec version (max_iter=1)
-    mask_norec = (random_samples_df[arch_col] == best_config[0]) & \
-                 (random_samples_df[layers_col] == best_config[1]) & \
-                 (random_samples_df[max_iter_col] == 1)
-    norec_rs_df = random_samples_df[mask_norec].copy()
-    norec_rs_df['Method'] = 'DFL-RS-NoRec'
+    if not method_type_col or method_type_col not in df_best.columns:
+        print(f"  Method_Type column not found, inferring from Database and Architecture...")
+        df_best = df_best.copy()
+        df_best['Method_Type'] = None
 
-    return best_rs_df, norec_rs_df, best_config
+        if 'Architecture' in df_best.columns:
+            no_nn_mask = df_best['Architecture'].astype(str).str.lower() == 'nonn'
+            df_best.loc[no_nn_mask, 'Method_Type'] = 'No-NN-RS'
+
+        if 'Database' in df_best.columns:
+            db_lower = df_best['Database'].astype(str).str.lower()
+            gl_mask = db_lower.str.contains('dfl_gl|dfl-gl|miqp_linear', na=False)
+            pw_mask = db_lower.str.contains('dfl_pw|dfl-pw|dfl_piecewise|miqp_piecewise', na=False)
+            df_best.loc[gl_mask, 'Method_Type'] = 'DFL-GL-RS'
+            df_best.loc[pw_mask & df_best['Method_Type'].isna(), 'Method_Type'] = 'DFL-RS'
+
+        method_type_col = 'Method_Type'
+
+    # Try Method_Type column first
+    if method_type_col and method_type_col in df_best.columns:
+        # Separate by Method_Type column
+        if 'DFL-GL-RS' in df_best[method_type_col].values:
+            df_gl = df_best[df_best[method_type_col] == 'DFL-GL-RS'].copy()
+            df_gl['Method'] = 'DFL-GL-RS'
+
+        # Check for both 'DFL-RS' and 'DFL-PW-RS'
+        if 'DFL-RS' in df_best[method_type_col].values:
+            df_pw = df_best[df_best[method_type_col] == 'DFL-RS'].copy()
+            df_pw['Method'] = 'DFL-RS'
+        elif 'DFL-PW-RS' in df_best[method_type_col].values:
+            df_pw = df_best[df_best[method_type_col] == 'DFL-PW-RS'].copy()
+            df_pw['Method'] = 'DFL-RS'
+
+        if 'No-NN-RS' in df_best[method_type_col].values:
+            df_no_nn = df_best[df_best[method_type_col] == 'No-NN-RS'].copy()
+            df_no_nn['Method'] = 'No-NN-RS'
+
+        # Fallback: if GL not found by exact name, try prefix matching
+        if df_gl.empty:
+            gl_mask = df_best[method_type_col].str.contains('GL', case=False, na=False)
+            if gl_mask.any():
+                df_gl = df_best[gl_mask].copy()
+                df_gl['Method'] = 'DFL-GL-RS'
+
+        # Fallback: if PW still not found, try prefix matching
+        if df_pw.empty:
+            pw_mask = df_best[method_type_col].str.contains('PW', case=False, na=False)
+            if pw_mask.any():
+                df_pw = df_best[pw_mask].copy()
+                df_pw['Method'] = 'DFL-RS'
+    # Log what was found
+    print(f"  DFL-GL-RS records found: {len(df_gl)}")
+    print(f"  DFL-RS (PW-based) records found: {len(df_pw)}")
+    if not df_no_nn.empty:
+        print(f"  No-NN-RS records found: {len(df_no_nn)}")
+
+    # If no GL or PW found, use No-NN as fallback for visualization
+    if df_gl.empty and df_pw.empty:
+        if not df_no_nn.empty:
+            print(f"  ℹ Using No-NN results as fallback...")
+            df_pw = df_no_nn.copy()
+        else:
+            return pd.DataFrame(), pd.DataFrame(), None
+
+    return df_gl, df_pw, {'arch': 'LSTM', 'layers': 3, 'iters': 7}
 
 
-def load_dfl_gl_data():
-    """Load DFL-GL ablation results and extract best configuration."""
-    df = load_and_prepare_df(DFL_GL_ABLATION_PATH, 'DFL-GL')
-    if df is None:
-        print("  Error: Could not load DFL-GL data file")
-        return pd.DataFrame()
+def load_comprehensive_comparison():
+    """Load comprehensive comparison data from results/tables."""
+    if not os.path.exists(COMPREHENSIVE_COMPARISON_PATH):
+        print(f"Warning: Comprehensive comparison file not found: {COMPREHENSIVE_COMPARISON_PATH}")
+        return None
 
-    max_iter_col = find_column(df, ['Max_Iterations', 'Max_Iteration', 'Max_Iter', 'max_iteration', 'max_iter'])
-    arch_col = find_column(df, ['Architecture', 'architecture', 'arch'])
-    layers_col = find_column(df, ['Num_Layers', 'num_layers', 'layers'])
-
-    if not all([max_iter_col, arch_col, layers_col]):
-        print(f"  Error: Missing config columns - max_iter: {max_iter_col}, arch: {arch_col}, layers: {layers_col}")
-        return pd.DataFrame()
-
-    config_cols = [arch_col, layers_col, max_iter_col]
-    best_config, random_samples_df = get_best_config(df, 'DFL-GL-RS', config_cols)
-
-    if best_config is None or len(random_samples_df) == 0:
-        print("  Error: Could not determine best configuration or no random samples found")
-        return pd.DataFrame()
-
-    mask = (random_samples_df[arch_col] == best_config[0]) & \
-           (random_samples_df[layers_col] == best_config[1]) & \
-           (random_samples_df[max_iter_col] == best_config[2])
-    best_gl_rs_df = random_samples_df[mask].copy()
-    best_gl_rs_df['Method'] = 'DFL-GL-RS'
-
-    print(f"  Successfully loaded {len(best_gl_rs_df)} DFL-GL-RS records")
-    return best_gl_rs_df
-
-
-def load_ablation_data():
-    """Load No-NN ablation study results."""
-    df = load_and_prepare_df(ABLATION_BENCHMARK_PATH, 'No-NN')
-    if df is None:
-        return pd.DataFrame()
-
-    max_iter_col = find_column(df, ['Max_Iterations', 'Max_Iteration', 'Max_Iter', 'max_iteration', 'max_iter'])
-    if max_iter_col is None:
-        return pd.DataFrame()
-
-    config_cols = [max_iter_col]
-    best_config, random_samples_df = get_best_config(df, 'No-NN-RS', config_cols)
-
-    if best_config is None or len(random_samples_df) == 0:
-        return pd.DataFrame()
-
-    best_nn_rs_df = random_samples_df[random_samples_df[max_iter_col] == best_config].copy()
-    best_nn_rs_df['Method'] = 'No-NN-RS'
-
-    return best_nn_rs_df
+    df = pd.read_csv(COMPREHENSIVE_COMPARISON_PATH)
+    print(f"Loaded comprehensive comparison data: {len(df)} records")
+    return df
 
 
 def get_method_style(method_name, use_ablation_colors=False):
@@ -288,13 +317,24 @@ def plot_profit_density_main_contribution(methods_data_left, methods_data_right,
     """Create two side-by-side density plots for profit distribution comparison."""
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(figure_width, figure_height))
 
-    prop_cycle = plt.rcParams['axes.prop_cycle']
-    colors = prop_cycle.by_key()['color']
-    color_iter = iter(colors)
+    # Define explicit color mappings for each method
+    color_map_left = {
+        'DFL-GL-RS': 'C0',      # Blue for DFL (GL-based)
+        'MIQP-Linear': 'C1'     # Orange for MIQP-GL
+    }
+    color_map_right = {
+        'DFL-RS': 'C2',         # Green for DFL (PW-based)
+        'MIQP-Piecewise': 'C3'  # Red for MIQP-PW
+    }
 
-    # Plot left subplot (GL-based)
+    # Plot left subplot (GL-based) - DFL first, then MIQP
     legend_labels_left, legend_handles_left = [], []
-    for method_name, df in methods_data_left.items():
+    plot_order_left = ['DFL-GL-RS', 'MIQP-Linear']
+    
+    for method_name in plot_order_left:
+        if method_name not in methods_data_left:
+            continue
+        df = methods_data_left[method_name]
         if df.empty or 'Ex_post_Profit' not in df.columns:
             continue
 
@@ -310,7 +350,7 @@ def plot_profit_density_main_contribution(methods_data_left, methods_data_right,
         x_range = np.linspace(profit.min(), profit.max(), 500)
         density = kde(x_range)
 
-        color = next(color_iter)
+        color = color_map_left[method_name]
         line = ax1.plot(x_range, density, color=color, linestyle=ls, linewidth=1.0, alpha=0.95)[0]
         ax1.fill_between(x_range, density, alpha=fill_alpha, color=color)
         ax1.axvline(mean_profit, color=color, linestyle='--', linewidth=1.0, alpha=0.7)
@@ -319,9 +359,14 @@ def plot_profit_density_main_contribution(methods_data_left, methods_data_right,
         legend_labels_left.append(legend_label)
         legend_handles_left.append(line)
 
-    # Plot right subplot (PW-based)
+    # Plot right subplot (PW-based) - DFL first, then MIQP
     legend_labels_right, legend_handles_right = [], []
-    for method_name, df in methods_data_right.items():
+    plot_order_right = ['DFL-RS', 'MIQP-Piecewise']
+    
+    for method_name in plot_order_right:
+        if method_name not in methods_data_right:
+            continue
+        df = methods_data_right[method_name]
         if df.empty or 'Ex_post_Profit' not in df.columns:
             continue
 
@@ -337,7 +382,7 @@ def plot_profit_density_main_contribution(methods_data_left, methods_data_right,
         x_range = np.linspace(profit.min(), profit.max(), 500)
         density = kde(x_range)
 
-        color = next(color_iter)
+        color = color_map_right[method_name]
         line = ax2.plot(x_range, density, color=color, linestyle=ls, linewidth=1.0, alpha=0.95)[0]
         ax2.fill_between(x_range, density, alpha=fill_alpha, color=color)
         ax2.axvline(mean_profit, color=color, linestyle='--', linewidth=1.0, alpha=0.7)
@@ -370,88 +415,62 @@ def plot_profit_density_main_contribution(methods_data_left, methods_data_right,
 
 
 # ============================================================================
-# Plot 2: Profit Density - Ablation Study
+# Plot 2: Noise Robustness - DFL vs MIQP
 # ============================================================================
 
-def plot_profit_density_ablation(methods_data, output_path, figure_width=3.5, figure_height=2.0,
-                                fill_alpha=0.2, bw_factor=0.5):
-    """Create density plot for ablation study."""
-    fig, ax = plt.subplots(figsize=(figure_width, figure_height))
-    legend_labels, legend_handles = [], []
-
-    for method_name, df in methods_data.items():
-        if df.empty or 'Ex_post_Profit' not in df.columns:
-            continue
-
-        profit = df['Ex_post_Profit'].dropna()
-        if len(profit) < 2:
-            continue
-
-        mean_profit, std_profit = profit.mean(), profit.std()
-        ls, label_short = get_method_style(method_name, use_ablation_colors=True)
-
-        kde = gaussian_kde(profit, bw_method='scott')
-        kde.set_bandwidth(kde.factor * bw_factor)
-        x_range = np.linspace(profit.min(), profit.max(), 500)
-        density = kde(x_range)
-
-        line = ax.plot(x_range, density, linestyle=ls, linewidth=1.0, alpha=0.9)[0]
-        color = line.get_color()
-
-        ax.fill_between(x_range, density, alpha=fill_alpha, color=color)
-        ax.axvline(mean_profit, color=color, linestyle='--', linewidth=1.0, alpha=0.6)
-
-        legend_label = f"{label_short} (€{mean_profit:.0f}±{std_profit:.0f})"
-        legend_labels.append(legend_label)
-        legend_handles.append(line)
-
-    ax.set_xlabel('Ex-post Profit (€)')
-    ax.set_ylabel('Density')
-    ax.ticklabel_format(axis='y', style='sci', scilimits=(0, 0))
-    ax.grid(True, alpha=0.25, linestyle=':', linewidth=0.4)
-    ax.spines['top'].set_visible(False)
-    ax.spines['right'].set_visible(False)
-    ax.legend(legend_handles, legend_labels, loc='best', frameon=True,
-                framealpha=0.95, edgecolor='black', fancybox=False)
-
-    plt.tight_layout(pad=0.2)
-    plt.savefig(output_path, dpi=600, bbox_inches='tight', pad_inches=0.01)
-    print(f"Saved: {output_path}")
-    plt.close()
-
-
-# ============================================================================
-# Plot 3: Noise Robustness - DFL vs MIQP
-# ============================================================================
-
-def plot_noise_robustness_dfl_vs_miqp(output_path):
+def plot_noise_robustness_dfl_vs_miqp(comp_df, output_path):
     """Create line plot showing DFL performance vs MIQP across noise levels."""
     noise_levels = ['10%', '20%', '30%', '40%', '50%', '60%', '70%', '80%', 'RS']
     x_positions = np.arange(len(noise_levels))
 
-    miqp_pw_baseline = [3837, 3780, 3735, 3716, 3643, 3587, 3546, 3514, 3365]
-    miqp_gl_baseline = [3624, 3563, 3451, 3325, 3253, 3136, 3118, 2948, 2810]
-    dfl_pw = [3872.41, 3870.92, 3864.53, 3872.47, 3871.29, 3868.49, 3866.57, 3879.12, 3890.00]
-    dfl_gl = [3727.59, 3733.36, 3731.93, 3735.49, 3725.12, 3710.25, 3718.57, 3719.21, 3718.35]
+    # Extract data from comprehensive comparison dataframe
+    def get_noise_series(comp_df, method_name, noise_values):
+        """Extract profit values for given method across noise levels."""
+        profits = []
+        for noise in noise_values:
+            # Convert noise to string for comparison
+            noise_str = str(noise)
+            row = comp_df[(comp_df['Method'] == method_name) & (comp_df['Noise'] == noise_str)]
+            if not row.empty:
+                profits.append(row['Ex_post_Profit'].values[0])
+            else:
+                profits.append(np.nan)
+        return profits
+
+    # Use string values for noise levels to match CSV format
+    noise_map = ['10', '20', '30', '40', '50', '60', '70', '80', 'RS']
+
+    # DFL methods (solid lines with markers)
+    dfl_gl = get_noise_series(comp_df, 'DFL (GL-based)', noise_map)
+    dfl_pw = get_noise_series(comp_df, 'DFL (PW-based)', noise_map)
+
+    # Noisy MIQP baselines (dashed lines with dots)
+    miqp_gl_noised = get_noise_series(comp_df, 'MIQP-GL-noised', noise_map)
+    miqp_pw_noised = get_noise_series(comp_df, 'MIQP-PW-noised', noise_map)
 
     fig, ax = plt.subplots(figsize=(3.5, 2.0))
 
-    # Use consistent color scheme with ablation study
+    # Plot DFL methods with solid lines
     line_dfl_gl = ax.plot(x_positions, dfl_gl, 's-', linewidth=1.5,
             markersize=4, label='DFL (GL-based)')[0]
-    ax.plot(x_positions, miqp_gl_baseline, 's--', color=line_dfl_gl.get_color(), linewidth=1.5,
-            markersize=4, label='MIQP-GL-noised', alpha=0.8)
 
-    line_dfl_pw = ax.plot(x_positions, dfl_pw, 'o-', linewidth=1.5,
+    # Plot noisy MIQP-GL with dots on dashed line
+    ax.plot(x_positions, miqp_gl_noised, 'o--', color=line_dfl_gl.get_color(), linewidth=1.5,
+            markersize=3, label='MIQP-GL-noised', alpha=0.8)
+
+    line_dfl_pw = ax.plot(x_positions, dfl_pw, '^-', linewidth=1.5,
             markersize=4, label='DFL (PW-based)')[0]
-    ax.plot(x_positions, miqp_pw_baseline, 'o--', color=line_dfl_pw.get_color(), linewidth=1.5,
-            markersize=4, label='MIQP-PW-noised', alpha=0.8)
 
-    ax.fill_between(x_positions, miqp_pw_baseline, dfl_pw,
-                    where=np.array(dfl_pw) >= np.array(miqp_pw_baseline),
+    # Plot noisy MIQP-PW with dots on dashed line
+    ax.plot(x_positions, miqp_pw_noised, 'o--', color=line_dfl_pw.get_color(), linewidth=1.5,
+            markersize=3, label='MIQP-PW-noised', alpha=0.8)
+
+    # Fill between to show DFL improvement over noisy MIQP
+    ax.fill_between(x_positions, miqp_pw_noised, dfl_pw,
+                    where=np.array(dfl_pw) >= np.array(miqp_pw_noised),
                     alpha=0.15, color=line_dfl_pw.get_color(), label='DFL-PW gain')
-    ax.fill_between(x_positions, miqp_gl_baseline, dfl_gl,
-                    where=np.array(dfl_gl) >= np.array(miqp_gl_baseline),
+    ax.fill_between(x_positions, miqp_gl_noised, dfl_gl,
+                    where=np.array(dfl_gl) >= np.array(miqp_gl_noised),
                     alpha=0.15, color=line_dfl_gl.get_color(), label='DFL-GL gain')
 
     ax.set_xlabel('Perturbation Level')
@@ -470,20 +489,41 @@ def plot_noise_robustness_dfl_vs_miqp(output_path):
 
 
 # ============================================================================
-# Plot 4: Noise Robustness - Ablation Study
+# Plot 3: Noise Robustness - Ablation Study
 # ============================================================================
 
-def plot_noise_robustness_ablation(output_path):
+def plot_noise_robustness_ablation(comp_df, output_path):
     """Create line plot for ablation study across noise levels."""
     noise_levels = ['10%', '20%', '30%', '40%', '50%', '60%', '70%', '80%', 'RS']
     x_positions = np.arange(len(noise_levels))
 
-    miqp_pw_rs = 3849.42
-    miqp_gl_rs = 3409.11
-    dfl_pw = [3872.41, 3870.92, 3864.53, 3872.47, 3871.29, 3868.49, 3866.57, 3879.12, 3890.00]
-    dfl_gl = [3727.59, 3733.36, 3731.93, 3735.49, 3725.12, 3710.25, 3718.57, 3719.21, 3718.35]
-    dfl_pw_no_nn = [3764.13, 3798.99, 3776.93, 3813.68, 3788.56, 3810.25, 3798.56, 3797.99, 3803.94]
-    dfl_pw_no_rec = [3821.41, 3831.55, 3841.09, 3847.67, 3848.38, 3869.27, 3855.90, 3849.15, 3851.07]
+    # Extract data from comprehensive comparison dataframe
+    def get_noise_series(comp_df, method_name, noise_values):
+        """Extract profit values for given method across noise levels."""
+        profits = []
+        for noise in noise_values:
+            # Convert noise to string for comparison
+            noise_str = str(noise)
+            row = comp_df[(comp_df['Method'] == method_name) & (comp_df['Noise'] == noise_str)]
+            if not row.empty:
+                profits.append(row['Ex_post_Profit'].values[0])
+            else:
+                profits.append(np.nan)
+        return profits
+
+    # Use string values for noise levels to match CSV format
+    noise_map = ['10', '20', '30', '40', '50', '60', '70', '80', 'RS']
+
+    # Get baseline values for MIQP methods (using '--' or 'RS' noise level)
+    miqp_pw_row = comp_df[(comp_df['Method'] == 'MIQP-PW') & (comp_df['Noise'] == '--')]
+    miqp_gl_row = comp_df[(comp_df['Method'] == 'MIQP-GL') & (comp_df['Noise'] == '--')]
+    miqp_pw_rs = miqp_pw_row['Ex_post_Profit'].values[0] if not miqp_pw_row.empty else np.nan
+    miqp_gl_rs = miqp_gl_row['Ex_post_Profit'].values[0] if not miqp_gl_row.empty else np.nan
+
+    dfl_pw = get_noise_series(comp_df, 'DFL (PW-based)', noise_map)
+    dfl_gl = get_noise_series(comp_df, 'DFL (GL-based)', noise_map)
+    dfl_pw_no_nn = get_noise_series(comp_df, 'DFL (PW-no-NN)', noise_map)
+    dfl_pw_no_rec = get_noise_series(comp_df, 'DFL (PW-no-Rec)', noise_map)
 
     fig, ax = plt.subplots(figsize=(3.5, 2.0))
 
@@ -510,13 +550,8 @@ def plot_noise_robustness_ablation(output_path):
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
 
-    # Position legend slightly higher
-    fig_obj = ax.get_figure()
-    axes_bbox = ax.get_position()
-    axes_height_inches = fig_obj.get_size_inches()[1] * axes_bbox.height
-    delta = 5.0 / (axes_height_inches * 25.4) if axes_height_inches > 0 else 0.02
-    ax.legend(loc='lower left', bbox_to_anchor=(0.0, 0.0 + 0.3*delta), bbox_transform=ax.transAxes,
-                frameon=True, framealpha=0.95, edgecolor='black', fancybox=False)
+    ax.legend(loc='lower left', bbox_to_anchor=(0.0, 0.05), frameon=True, framealpha=0.95,
+                edgecolor='black', fancybox=False)
 
     plt.tight_layout(pad=0.2)
     plt.savefig(output_path, dpi=600, bbox_inches='tight', pad_inches=0.01)
@@ -525,10 +560,10 @@ def plot_noise_robustness_ablation(output_path):
 
 
 # ============================================================================
-# Plot 5: Profit vs Penalties Trade-off (PW-based Ablation)
+# Plot 4: Profit vs Penalties Trade-off (PW-based Ablation)
 # ============================================================================
 
-def plot_profit_vs_penalties_ablation(output_path, figure_width=7.16, figure_height=2.0):
+def plot_profit_vs_penalties_ablation(comp_df, output_path, figure_width=7.16, figure_height=2.0):
     """Create two side-by-side scatter plots comparing profit vs. penalties for PW-based methods."""
     prop_cycle = plt.rcParams['axes.prop_cycle']
     colors = prop_cycle.by_key()['color']
@@ -537,33 +572,41 @@ def plot_profit_vs_penalties_ablation(output_path, figure_width=7.16, figure_hei
     color_dfl_no_nn = colors[2]
     color_dfl_no_rec = colors[3]
 
+    # Extract data from comprehensive comparison dataframe
+    def get_noise_series(comp_df, method_name, noise_values, column):
+        """Extract values for given method across noise levels."""
+        values = []
+        for noise in noise_values:
+            # Convert noise to string for comparison
+            noise_str = str(noise)
+            row = comp_df[(comp_df['Method'] == method_name) & (comp_df['Noise'] == noise_str)]
+            if not row.empty:
+                values.append(row[column].values[0])
+            else:
+                values.append(np.nan)
+        return values
 
-    # Common profit data
-    miqp_pw_profit = 3849.42
-    dfl_pw_profits = [3872.41, 3870.92, 3864.53, 3872.47, 3871.29,
-                      3868.49, 3866.57, 3879.12, 3890.00]
-    dfl_pw_no_nn_profits = [3764.13, 3798.99, 3776.93, 3813.68, 3788.56,
-                            3810.25, 3798.56, 3797.99, 3803.94]
-    dfl_pw_no_rec_profits = [3821.41, 3831.55, 3841.09, 3847.67, 3848.38,
-                             3869.27, 3855.90, 3849.15, 3851.07]
+    # Use string values for noise levels to match CSV format
+    noise_map = ['10', '20', '30', '40', '50', '60', '70', '80', 'RS']
 
-    # Volume penalty data
-    miqp_pw_vol_penalty = 119.59
-    dfl_pw_vol_penalties = [277.65, 245.47, 234.73, 267.47, 273.54,
-                            277.43, 261.85, 233.89, 271.72]
-    dfl_pw_no_nn_vol_penalties = [534.44, 500.31, 518.72, 494.60, 521.15,
-                                   494.47, 518.65, 519.97, 532.53]
-    dfl_pw_no_rec_vol_penalties = [195.04, 214.28, 236.24, 237.14, 286.32,
-                                    284.50, 338.80, 362.53, 453.13]
+    # Get MIQP-PW baseline data (using '--' noise level)
+    miqp_pw_row = comp_df[(comp_df['Method'] == 'MIQP-PW') & (comp_df['Noise'] == '--')]
+    miqp_pw_profit = miqp_pw_row['Ex_post_Profit'].values[0] if not miqp_pw_row.empty else np.nan
+    miqp_pw_vol_penalty = miqp_pw_row['Volume_Penalty'].values[0] if not miqp_pw_row.empty else np.nan
+    miqp_pw_si_penalty = miqp_pw_row['SI_Penalty'].values[0] if not miqp_pw_row.empty else np.nan
 
-    # SI penalty data
-    miqp_pw_si_penalty = -19.15
-    dfl_pw_si_penalties = [-25.75, -15.18, -17.58, -19.69, -23.59,
-                           -22.09, -21.38, -19.75, -31.59]
-    dfl_pw_no_nn_si_penalties = [12.68, 7.04, 16.82, 6.48, 8.77,
-                                  15.56, 7.57, 15.66, 7.86]
-    dfl_pw_no_rec_si_penalties = [-23.70, -25.63, -28.02, -24.02, -26.93,
-                                   -25.72, -24.20, -20.08, -2.94]
+    # Get DFL method data
+    dfl_pw_profits = get_noise_series(comp_df, 'DFL (PW-based)', noise_map, 'Ex_post_Profit')
+    dfl_pw_vol_penalties = get_noise_series(comp_df, 'DFL (PW-based)', noise_map, 'Volume_Penalty')
+    dfl_pw_si_penalties = get_noise_series(comp_df, 'DFL (PW-based)', noise_map, 'SI_Penalty')
+
+    dfl_pw_no_nn_profits = get_noise_series(comp_df, 'DFL (PW-no-NN)', noise_map, 'Ex_post_Profit')
+    dfl_pw_no_nn_vol_penalties = get_noise_series(comp_df, 'DFL (PW-no-NN)', noise_map, 'Volume_Penalty')
+    dfl_pw_no_nn_si_penalties = get_noise_series(comp_df, 'DFL (PW-no-NN)', noise_map, 'SI_Penalty')
+
+    dfl_pw_no_rec_profits = get_noise_series(comp_df, 'DFL (PW-no-Rec)', noise_map, 'Ex_post_Profit')
+    dfl_pw_no_rec_vol_penalties = get_noise_series(comp_df, 'DFL (PW-no-Rec)', noise_map, 'Volume_Penalty')
+    dfl_pw_no_rec_si_penalties = get_noise_series(comp_df, 'DFL (PW-no-Rec)', noise_map, 'SI_Penalty')
 
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(figure_width, figure_height))
 
@@ -619,80 +662,110 @@ def plot_profit_vs_penalties_ablation(output_path, figure_width=7.16, figure_hei
 # ============================================================================
 
 def main():
-    """Generate all publication-quality plots."""
+    """Generate publication-quality plots."""
     print("=" * 80)
     print("Generating Publication-Quality Plots for UPHES Optimization")
     print("=" * 80)
+    print(f"\nRepository root: {REPO_ROOT}")
+    print(f"Output directory: {OUTPUT_DIR}")
 
-    output_dir = Path("./figures")
-    output_dir.mkdir(exist_ok=True)
+    # Create output directory
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
     # Load data for density plots
     print("\nLoading data...")
     miqp_linear_df = load_miqp_data(MIQP_PATHS['MIQP-Linear'], 'MIQP-Linear')
     miqp_piecewise_df = load_miqp_data(MIQP_PATHS['MIQP-Piecewise'], 'MIQP-Piecewise')
-    dfl_rs_df, dfl_rs_norec_df, _ = load_dfl_data()
-    dfl_gl_rs_df = load_dfl_gl_data()
-    no_nn_rs_df = load_ablation_data()
+    dfl_gl_df, dfl_pw_df, best_config = load_dfl_data()
+    comp_df = load_comprehensive_comparison()
 
     print("\nData Summary:")
     print(f"  MIQP-Linear: {len(miqp_linear_df)} records")
     print(f"  MIQP-Piecewise: {len(miqp_piecewise_df)} records")
-    print(f"  DFL-RS: {len(dfl_rs_df)} records")
-    print(f"  DFL-GL-RS: {len(dfl_gl_rs_df)} records")
-    print(f"  No-NN-RS: {len(no_nn_rs_df)} records")
-    print(f"  DFL-RS-NoRec: {len(dfl_rs_norec_df)} records")
+    print(f"  DFL-GL (iteration 7): {len(dfl_gl_df)} records")
+    print(f"  DFL-PW (iteration 7): {len(dfl_pw_df)} records")
+    if best_config:
+        print(f"  Best config: {best_config}")
+    if comp_df is not None:
+        print(f"  Comprehensive comparison: {len(comp_df)} records")
 
     # Generate plots
     print("\n" + "=" * 80)
-    print("Generating Plots...")
+    print("Generating Plots (4 of 4)...")
     print("=" * 80)
 
-    # Plot 1: Profit Density - Main Contribution
-    print("\n[1/5] Profit Density - Main Contribution")
+    # Plot 1: Profit Density - Main Contribution (GL-based vs PW-based)
+    print("\n[1/4] Profit Density - Main Contribution")
     for ext in ['pdf', 'png']:
+        # Prepare data for both sides: Left = GL-based, Right = PW-based
+        methods_left = {'MIQP-Linear': miqp_linear_df}
+        methods_right = {'MIQP-Piecewise': miqp_piecewise_df}
+
+        # Filter DFL data to ONLY Random Samples (RS) for density plot
+        # Add GL-based DFL to left side if available
+        if not dfl_gl_df.empty and len(dfl_gl_df) > 0:
+            dfl_gl_rs = dfl_gl_df[(dfl_gl_df['Noise_Level'] == 'random') | (dfl_gl_df['Noise_Level'] == 'N/A')].copy()
+            if len(dfl_gl_rs) > 0:
+                methods_left['DFL-GL-RS'] = dfl_gl_rs
+                print(f"    ✓ GL-based DFL (RS only) added to left subplot ({len(dfl_gl_rs)} records)")
+            else:
+                print(f"    ⚠ Warning: GL-based DFL RS data not found")
+        else:
+            print(f"    ⚠ Warning: GL-based DFL data not found")
+
+        # Add PW-based DFL to right side if available
+        if not dfl_pw_df.empty and len(dfl_pw_df) > 0:
+            dfl_pw_rs = dfl_pw_df[(dfl_pw_df['Noise_Level'] == 'random') | (dfl_pw_df['Noise_Level'] == 'N/A')].copy()
+            if len(dfl_pw_rs) > 0:
+                methods_right['DFL-RS'] = dfl_pw_rs
+                print(f"    ✓ PW-based DFL (RS only) added to right subplot ({len(dfl_pw_rs)} records)")
+            else:
+                print(f"    ⚠ Warning: PW-based DFL RS data not found")
+        else:
+            print(f"    ⚠ Warning: PW-based DFL data not found")
+
         plot_profit_density_main_contribution(
-            methods_data_left={'DFL-GL-RS': dfl_gl_rs_df, 'MIQP-Linear': miqp_linear_df},
-            methods_data_right={'DFL-RS': dfl_rs_df, 'MIQP-Piecewise': miqp_piecewise_df},
-            output_path=output_dir / f'profit_density_main_contribution.{ext}'
+            methods_data_left=methods_left,
+            methods_data_right=methods_right,
+            output_path=OUTPUT_DIR / f'profit_density_main_contribution.{ext}'
         )
 
-    # Plot 2: Profit Density - Ablation Study
-    print("\n[2/5] Profit Density - Ablation Study")
-    for ext in ['pdf', 'png']:
-        plot_profit_density_ablation(
-            methods_data={
-                'DFL-RS': dfl_rs_df,
-                'No-NN-RS': no_nn_rs_df,
-                'DFL-RS-NoRec': dfl_rs_norec_df
-            },
-            output_path=output_dir / f'profit_density_ablation_study.{ext}'
-        )
+    # Plot 2: Noise Robustness - DFL vs MIQP
+    print("\n[2/4] Noise Robustness - DFL vs MIQP")
+    if comp_df is not None:
+        for ext in ['pdf', 'png']:
+            plot_noise_robustness_dfl_vs_miqp(
+                comp_df=comp_df,
+                output_path=OUTPUT_DIR / f'noise_robustness_dfl_vs_miqp.{ext}'
+            )
+    else:
+        print("  ⚠ Skipping: comprehensive comparison data not available")
 
-    # Plot 3: Noise Robustness - DFL vs MIQP
-    print("\n[3/5] Noise Robustness - DFL vs MIQP")
-    for ext in ['pdf', 'png']:
-        plot_noise_robustness_dfl_vs_miqp(
-            output_path=output_dir / f'noise_robustness_dfl_vs_miqp.{ext}'
-        )
+    # Plot 3: Noise Robustness - Ablation Study
+    print("\n[3/4] Noise Robustness - Ablation Study")
+    if comp_df is not None:
+        for ext in ['pdf', 'png']:
+            plot_noise_robustness_ablation(
+                comp_df=comp_df,
+                output_path=OUTPUT_DIR / f'noise_robustness_ablation_study.{ext}'
+            )
+    else:
+        print("  ⚠ Skipping: comprehensive comparison data not available")
 
-    # Plot 4: Noise Robustness - Ablation Study
-    print("\n[4/5] Noise Robustness - Ablation Study")
-    for ext in ['pdf', 'png']:
-        plot_noise_robustness_ablation(
-            output_path=output_dir / f'noise_robustness_ablation_study.{ext}'
-        )
-
-    # Plot 5: Profit vs Penalties - Ablation
-    print("\n[5/5] Profit vs Penalties - Ablation")
-    for ext in ['pdf', 'png']:
-        plot_profit_vs_penalties_ablation(
-            output_path=output_dir / f'profit_vs_penalties_ablation.{ext}'
-        )
+    # Plot 4: Profit vs Penalties - Ablation
+    print("\n[4/4] Profit vs Penalties - Ablation")
+    if comp_df is not None:
+        for ext in ['pdf', 'png']:
+            plot_profit_vs_penalties_ablation(
+                comp_df=comp_df,
+                output_path=OUTPUT_DIR / f'profit_vs_penalties_ablation.{ext}'
+            )
+    else:
+        print("  ⚠ Skipping: comprehensive comparison data not available")
 
     print("\n" + "=" * 80)
     print("All plots generated successfully!")
-    print(f"Output directory: {output_dir.absolute()}")
+    print(f"Output directory: {OUTPUT_DIR.absolute()}")
     print("=" * 80)
 
 

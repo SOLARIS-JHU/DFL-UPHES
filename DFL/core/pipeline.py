@@ -58,7 +58,8 @@ class RecursiveLinearizationPipeline:
         price = date_data['price'].clone()
 
         # Predict initial flow from (p,h)
-        flow_init = self.params.predict_q_poly(power_init, head_init)
+        # Note: predict_q_poly expects batch dimension, so we unsqueeze, call, then squeeze
+        flow_init = self.params.predict_q_poly(power_init.unsqueeze(0), head_init.unsqueeze(0)).squeeze(0)
 
         # Get input features for the weight predictor
         x = torch.stack([price, power_init, flow_init, head_init], dim=1)  # [time_horizon, 4]

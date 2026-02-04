@@ -12,9 +12,16 @@ os.environ["OMP_NUM_THREADS"] = "1"
 os.environ["MKL_NUM_THREADS"] = "1" 
 os.environ["OPENBLAS_NUM_THREADS"] = "1"
 
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+REPO_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, ".."))
+FIGURES_DIR = os.path.join(REPO_ROOT, "Data", "price_figures")
+
+
 # Load price data
-def load_price_data(file_path="./Belgium.csv", year=2024):
+def load_price_data(file_path=None, year=2024):
     """Load and filter price data for a specific year"""
+    if file_path is None:
+        file_path = os.path.join(REPO_ROOT, "Data", "Belgium.csv")
     data = pd.read_csv(file_path)
     data['Datetime (UTC)'] = pd.to_datetime(data['Datetime (UTC)'])
     # Filter for specified year
@@ -125,6 +132,7 @@ def k_medoids(X, k, max_iter=100, nb_restarts=50):
 # Visualize clusters
 def visualize_clusters(X_scaled, labels, medoids, dates, medoids_idx, X_original):
     """Visualize clustering results with PCA and plot the medoids, excluding 2024-12-12 cluster"""
+    os.makedirs(FIGURES_DIR, exist_ok=True)
     try:
         # Identify which medoid index corresponds to 2024-12-12
         exclude_date = pd.Timestamp('2024-12-12').date()
@@ -159,7 +167,7 @@ def visualize_clusters(X_scaled, labels, medoids, dates, medoids_idx, X_original
         plt.ylabel('PCA Component 2')
         plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
         plt.tight_layout()
-        plt.savefig("./cluster_visualization_2024.png", dpi=300)
+        plt.savefig(os.path.join(FIGURES_DIR, "cluster_visualization_2024.png"), dpi=300)
         plt.close()
     except Exception as e:
         print(f"Error generating PCA visualization: {e}")
@@ -201,7 +209,7 @@ def visualize_clusters(X_scaled, labels, medoids, dates, medoids_idx, X_original
         plt.ylabel('Standardized Price')
         plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
         plt.tight_layout()
-        plt.savefig("./medoid_profiles_scaled_2024.png", dpi=300)
+        plt.savefig(os.path.join(FIGURES_DIR, "medoid_profiles_scaled_2024.png"), dpi=300)
         plt.close()
         
         # Plot original price profiles with markers
@@ -222,7 +230,7 @@ def visualize_clusters(X_scaled, labels, medoids, dates, medoids_idx, X_original
         plt.ylabel('Price (EUR/MWh)')
         plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
         plt.tight_layout()
-        plt.savefig("./medoid_profiles_original_2024.png", dpi=300)
+        plt.savefig(os.path.join(FIGURES_DIR, "medoid_profiles_original_2024.png"), dpi=300)
         plt.close()
     except Exception as e:
         print(f"Error generating price profile plots: {e}")
@@ -247,7 +255,7 @@ def visualize_clusters(X_scaled, labels, medoids, dates, medoids_idx, X_original
         plt.xlabel('Cluster')
         plt.ylabel('Number of Days')
         plt.tight_layout()
-        plt.savefig("./cluster_sizes_2024.png", dpi=300)
+        plt.savefig(os.path.join(FIGURES_DIR, "cluster_sizes_2024.png"), dpi=300)
         plt.close()
     except Exception as e:
         print(f"Error generating cluster size plot: {e}")
@@ -316,10 +324,19 @@ def build_price_database(file_path="./Belgium.csv", year=2024, n_clusters=20):
     return database, labels, dates
 
 # Save the database to a CSV file
-def save_database_to_csv(database, file_path="./price_data_2024.csv"):
+def save_database_to_csv(database, file_path=None):
     """Save the database to a CSV file"""
+    if file_path is None:
+        file_path = os.path.join(REPO_ROOT, "Data", "price_data_2024.csv")
     rows = []
+    exclude_date = "2024-12-12"
     for day, info in database.items():
+        try:
+            day_key = pd.to_datetime(day).strftime("%Y-%m-%d")
+        except Exception:
+            day_key = str(day)
+        if day_key == exclude_date:
+            continue
         row = {
             "date": day,
             "type": info["type"],
@@ -339,7 +356,11 @@ if __name__ == "__main__":
         # Build the database with 20 clusters
         n_clusters = 20
         print(f"Building database with {n_clusters} representative days from 2024...")
-        database, labels, dates = build_price_database("./Belgium.csv", year=2024, n_clusters=n_clusters)
+        database, labels, dates = build_price_database(
+            os.path.join(REPO_ROOT, "Data", "Belgium.csv"),
+            year=2024,
+            n_clusters=n_clusters
+        )
         
         # Display the keys (dates) and type of each chosen day
         print("\nRepresentative days in the database:")
@@ -347,7 +368,7 @@ if __name__ == "__main__":
             print(f"Date: {day}, Type: {info['type']}")
         
         # Save the database to a CSV file
-        save_database_to_csv(database, "./price_data_2024.csv")
+        save_database_to_csv(database)
         
         print("\nDatabase creation completed successfully!")
     except Exception as e:

@@ -152,7 +152,16 @@ def load_new_price_data(file_path="../Data/price_data_2024.csv", device=None):
 
         # Process each row
         for _, row in df.iterrows():
-            date_str = row['date']
+            date_raw = row['date']
+            # Normalize date format to YYYY-MM-DD
+            try:
+                date_obj = pd.to_datetime(date_raw)
+                date_str = date_obj.strftime('%Y-%m-%d')
+            except:
+                # If parsing fails, use raw string but warn
+                print(f"Warning: Could not parse date '{date_raw}', using as-is")
+                date_str = date_raw
+
             prices_str = row['prices_hourly']
 
             # Parse the prices (attempting different delimiter formats)

@@ -7,11 +7,33 @@ with recursive linearization.
 
 import torch
 import torch.nn as nn
+import numpy as np
 import time
 from pathlib import Path
+import scipy.sparse
 
 from ..core.models import BoundedLogWeightPredictor, FixedWeightConfig
 from ..core.pipeline import RecursiveLinearizationPipeline, BaselineRecursiveLinearization
+
+# Monkey patch for scipy/ECOS compatibility (scipy 1.13+ changed sparse matrix API)
+# This patch adds get_shape() method to csc_array objects for backward compatibility with ECOS
+if hasattr(scipy.sparse, 'csc_array'):
+    _csc_array_cls = scipy.sparse.csc_array
+
+    # Add get_shape method to the class if it doesn't exist
+    if not hasattr(_csc_array_cls, 'get_shape'):
+        def get_shape_method(self):
+            """Return shape for backward compatibility with ECOS."""
+            return self.shape
+
+        _csc_array_cls.get_shape = get_shape_method
+
+# Set random seed for reproducibility
+np.random.seed(42)
+torch.manual_seed(42)
+if torch.cuda.is_available():
+    torch.cuda.manual_seed(42)
+    torch.cuda.manual_seed_all(42)
 
 
 def train_recursive_linearization(weight_network, params, optimizer_layer, regression_layer,
@@ -80,7 +102,7 @@ def train_recursive_linearization(weight_network, params, optimizer_layer, regre
     date_data = historical_data[train_date]
     power_orig = date_data['power']
     head_orig = date_data['head']
-    flow_orig = params.predict_q_poly(power_orig, head_orig)
+    flow_orig = params.predict_q_poly(power_orig.unsqueeze(0), head_orig.unsqueeze(0)).squeeze(0)
 
     # Initialize history tracking
     history = {
@@ -141,8 +163,8 @@ def train_recursive_linearization(weight_network, params, optimizer_layer, regre
 
             optimizer.step()
 
-            # Update learning rate scheduler
-            scheduler.step(simulated_profit)
+            # Update learning rate scheduler (detach to avoid gradient tracking)
+            scheduler.step(simulated_profit.detach())
 
             # Record weight info
             history['log_w_p'].append(log_w_p.detach().cpu().numpy())
@@ -200,7 +222,7 @@ def train_recursive_linearization(weight_network, params, optimizer_layer, regre
 
 
 def train_single_model(config, architecture, num_layers, max_iterations, date_str, date_data,
-                       params, device):
+                       params, device, db_name=None):
     """
     Train a single model configuration for a specific date.
 
@@ -213,12 +235,18 @@ def train_single_model(config, architecture, num_layers, max_iterations, date_st
         date_data: Data dictionary for this date
         params: HydroParameters instance
         device: PyTorch device
+        db_name: Database name for organizing output (e.g., 'MIQP_piecewise_results_relative_noise_10pct')
 
     Returns:
         dict: Training results
     """
     try:
         from ..core.layers import TaylorRegressionLayer, OptiLayer
+        from ..utils.helpers import load_preprocessed_data
+
+        # Ensure preprocessed data is loaded in this worker process
+        # This sets up the necessary builtins (h_v_coeffs, etc.)
+        load_preprocessed_data()
 
         # Initialize layers
         regression_layer = TaylorRegressionLayer(params)
@@ -226,7 +254,10 @@ def train_single_model(config, architecture, num_layers, max_iterations, date_st
 
         # Create output directory
         config_name = f"{architecture}_{num_layers}layer_{max_iterations}iter"
-        output_dir = Path(config.output_base_dir) / config_name / date_str
+        if db_name:
+            output_dir = Path(config.output_base_dir) / db_name / config_name / date_str
+        else:
+            output_dir = Path(config.output_base_dir) / config_name / date_str
         output_dir.mkdir(exist_ok=True, parents=True)
 
         # Initialize network based on config
@@ -266,9 +297,9 @@ def train_single_model(config, architecture, num_layers, max_iterations, date_st
         )
         training_time = time.time() - start_time
 
-        # Save model weights if using neural network
+        # Save best model weights if using neural network
         if trained_network is not None:
-            torch.save(trained_network.state_dict(), output_dir / "model.pt")
+            torch.save(trained_network.state_dict(), output_dir / "best_model.pt")
 
         return {'success': True, 'training_time': training_time}
 

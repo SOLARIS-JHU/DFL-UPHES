@@ -70,7 +70,7 @@ def load_portfolio_data(library_path=None):
             r, m, head_max, head_min, h_dead_up, h_normal_up, height_up, R,
             height_low, n, h_dead_low, h_normal_low, max_vol_up, max_vol_low,
             max_vol, ramp_down, ramp_up, min_vol_low, target_vol_up,
-            target_vol_low, target_head, gross_head, get_v_low
+            target_vol_low, target_head, gross_head
         )
 
         return {
@@ -81,7 +81,7 @@ def load_portfolio_data(library_path=None):
             'max_vol_low': max_vol_low, 'max_vol': max_vol,
             'ramp_down': ramp_down, 'ramp_up': ramp_up, 'min_vol_low': min_vol_low,
             'target_vol_up': target_vol_up, 'target_vol_low': target_vol_low,
-            'target_head': target_head, 'gross_head': gross_head, 'get_v_low': get_v_low
+            'target_head': target_head, 'gross_head': gross_head
         }
 
     except ImportError as e:
@@ -101,6 +101,7 @@ def load_preprocessed_data(preprocess_file=None):
     """
     import dill as pickle
     from pathlib import Path
+    import builtins
 
     # Auto-detect preprocess file path if not provided
     if preprocess_file is None:
@@ -114,7 +115,6 @@ def load_preprocessed_data(preprocess_file=None):
             preprocess_file = Path("../preprocess.pkl").resolve()
 
     # Import torch globally so pickled functions can access it
-    import builtins
     if not hasattr(builtins, 'torch'):
         builtins.torch = torch
 
@@ -132,9 +132,16 @@ def load_preprocessed_data(preprocess_file=None):
          get_UPC_bound, LR_UPC_bound) = data
 
         # Make variables available globally for pickled functions
+        # These are accessed by pickled lambda and closure functions
         builtins.h_v_coeffs = h_v_coeffs_dup
+        builtins.h_v_coeffs_orig = h_v_coeffs  # Also set the original name just in case
         builtins.v_low_h_coeffs = v_low_h_coeffs
         builtins.device = torch.device("cpu")
+        builtins.torch = torch  # Ensure torch is always available
+
+        # Import all commonly needed items into builtins
+        import numpy as np
+        builtins.np = np
 
         return {
             'v_low_h_coeffs': v_low_h_coeffs,
@@ -189,8 +196,8 @@ def initialize_head_and_volume(h_to_v_low_fitted, device=None):
         device = torch.device("cpu")
 
     head_init = torch.tensor(77.0, device=device, dtype=torch.float32)
-    # Pass scalar value to avoid issues with preprocessing.py torch check
-    v_low_init = torch.tensor(h_to_v_low_fitted(77.0), device=device, dtype=torch.float32)
+    # Extract scalar value to avoid PyTorch tensor construction warning
+    v_low_init = torch.tensor(h_to_v_low_fitted(77.0).item(), device=device, dtype=torch.float32)
 
     print(f"Initial head: {head_init.item()}, Initial v_low: {v_low_init.item()}")
 

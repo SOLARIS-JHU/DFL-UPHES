@@ -1,0 +1,203 @@
+DFL-for-UPHES Repository Structure
+═════════════════════════════════════════════════════════════════════════════
+
+DFL-for-UPHES/
+│
+├─── 📊 Data/                              Input datasets and UPC information
+│    ├─── UPCs/                            Unit Performance Curve data
+│    │    ├─── Mod_Francis_joint.csv       Combined UPC dataset
+│    │    ├─── UPC_visualization.py        UPC plotting scripts
+│    │    └─── README.md                   UPC documentation
+│    └─── price_data_2024.csv              Day-ahead electricity prices
+│
+├─── 🧠 DFL/                                Main DFL Framework (Refactored)
+│    │
+│    ├─── config/                          Configuration classes
+│    │    ├─── gl_config.py                Global Linear config
+│    │    ├─── pw_config.py                Piecewise config
+│    │    └─── ablation_config.py          Ablation study config
+│    │
+│    ├─── core/                            Core DFL components
+│    │    ├─── models.py                   Neural penalty predictor (LSTM)
+│    │    ├─── layers.py                   Linearization, solver, simulator
+│    │    ├─── pipeline.py                 Recursive refinement orchestrator
+│    │    └─── parameters.py               Parameter management
+│    │
+│    ├─── data/                            Data handling
+│    │    ├─── loaders.py                  Data loading utilities
+│    │    └─── noise.py                    Noise injection functions
+│    │
+│    ├─── training/                        Training procedures
+│    │    ├─── pretraining.py              Pretraining logic
+│    │    └─── trainer.py                  End-to-end trainer
+│    │
+│    ├─── validation/                      Model evaluation
+│    │    └─── validator.py                Validation procedures
+│    │
+│    ├─── utils/                           Utilities
+│    │    └─── helpers.py                  Helper functions
+│    │
+│    ├─── scripts/                         CLI entry points
+│    │    ├─── generate_noisy_data.py      Generate training data
+│    │    ├─── run_pretraining_gl.py       Train GL models
+│    │    ├─── run_pretraining_pw.py       Train PW models
+│    │    ├─── run_validation_gl.py        Validate GL models
+│    │    ├─── run_validation_pw.py        Validate PW models
+│    │    └─── run_ablation_study.py       Run ablation experiments
+│    │
+│    └─── outputs/                         Generated outputs
+│         ├─── noisy_data/                 Training data (0-80% noise)
+│         ├─── trained_models/             Neural network checkpoints
+│         └─── validation_results/         Performance benchmarks
+│              ├─── comprehensive/         Aggregated results
+│              ├─── MIQP_linear_*/         GL validation results
+│              ├─── MIQP_piecewise_*/      PW validation results
+│              └─── ablation_study/        Ablation results
+│
+├─── 🔢 MIQP/                               MIQP Baseline Methods
+│    ├─── MIQP_linear/                     Global linearization
+│    │    ├─── MIQP_global_linear.py       GL implementation
+│    │    ├─── MILP_global_linear_results.csv
+│    │    └─── MILP_global_linear_benchmark.csv
+│    │
+│    └─── MIQP_piecewise/                  Piecewise SOS2
+│         ├─── MIQP_piecewise.py           PW implementation
+│         ├─── MIQP_piecewise_results.csv
+│         └─── MIQP_piecewise_benchmark.csv
+│
+├─── 📦 DFL_*-based/                        Legacy implementations (stable)
+│    ├─── DFL_GL-based/                    GL training-data variant
+│    ├─── DFL_PW-based/                    PW training-data variant
+│    └─── DFL_no-NN/                       Ablation baseline
+│
+├─── 📈 results/                            Publication outputs
+│    ├─── tables/                          Comparison tables
+│    │    ├─── comprehensive_comparison.tex
+│    │    └─── comprehensive_comparison.csv
+│    │
+│    ├─── figures/                         Visualizations
+│    │    ├─── profit_density_*.pdf/png
+│    │    ├─── noise_robustness_*.pdf/png
+│    │    └─── profit_vs_penalties_*.pdf/png
+│    │
+│    ├─── print_tables.py                  Table generation
+│    └─── visualization.py                 Plot generation
+│
+├─── 🔬 linearization_error/                Approximation accuracy analysis
+│    ├─── linearization_error.py           Error analysis script
+│    └─── preliminary_results/             Accuracy assessments
+│
+├─── 📚 Library/                            System configuration
+│    └─── V_H_relations.py                 Volume-Head relations
+│
+├─── 📄 preprocessing.py                    Data preprocessing script
+├─── 📄 preprocess.pkl                      Preprocessed UPC data
+├─── 📄 requirements.txt                    Python dependencies
+└─── 📄 README.md                           Main documentation
+
+
+═════════════════════════════════════════════════════════════════════════════
+Pipeline Workflow
+═════════════════════════════════════════════════════════════════════════════
+
+  [1] preprocessing.py
+      │
+      └──> preprocess.pkl
+           │
+           v
+  [2] MIQP Baselines (parallel)
+      ├── MIQP_linear/MIQP_global_linear.py    ──> GL results
+      └── MIQP_piecewise/MIQP_piecewise.py     ──> PW results
+           │
+           v
+  [3] DFL/scripts/generate_noisy_data.py
+      │
+      ├──> GL: 0-80% noise datasets
+      └──> PW: 0-80% noise datasets
+           │
+           v
+  [4] DFL Training (parallel)
+      ├── run_pretraining_gl.py  ──> GL models
+      └── run_pretraining_pw.py  ──> PW models
+           │
+           v
+  [5] DFL Validation (parallel)
+      ├── run_validation_gl.py   ──> GL benchmarks
+      ├── run_validation_pw.py   ──> PW benchmarks
+      └── run_ablation_study.py  ──> Ablation benchmarks
+           │
+           v
+  [6] Results Generation (parallel)
+      ├── results/print_tables.py        ──> LaTeX/CSV tables
+      └── results/visualization.py       ──> PDF/PNG figures
+
+
+═════════════════════════════════════════════════════════════════════════════
+DFL Component Architecture
+═════════════════════════════════════════════════════════════════════════════
+
+  Price Data ──┐
+               │
+  MIQP Results ┼──> [DFL Pipeline] ──> Optimal Schedule
+               │
+  UPC Data ────┘
+
+  DFL Pipeline Components:
+
+    ┌─────────────────────────────────────────────────────┐
+    │                                                       │
+    │  ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓  │
+    │  ┃  1. Neural Penalty Predictor (LSTM)          ┃  │
+    │  ┃     - Predicts time-varying penalty weights  ┃  │
+    │  ┃     - core/models.py                         ┃  │
+    │  ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛  │
+    │                     │                                │
+    │                     v                                │
+    │  ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓  │
+    │  ┃  2. Local Linearization Layer                ┃  │
+    │  ┃     - First-order Taylor approximations      ┃  │
+    │  ┃     - core/layers.py                         ┃  │
+    │  ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛  │
+    │                     │                                │
+    │                     v                                │
+    │  ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓  │
+    │  ┃  3. Differentiable QP Solver (CVXPYLayers)   ┃  │
+    │  ┃     - Convex optimization with gradients     ┃  │
+    │  ┃     - core/layers.py                         ┃  │
+    │  ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛  │
+    │                     │                                │
+    │                     v                                │
+    │  ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓  │
+    │  ┃  4. Physical Simulator                       ┃  │
+    │  ┃     - Validates under true nonlinear model   ┃  │
+    │  ┃     - core/layers.py                         ┃  │
+    │  ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛  │
+    │                     │                                │
+    │                     └─────> Feedback ────┐           │
+    │                                           │           │
+    │                 (Recursive Refinement)    │           │
+    │                                           v           │
+    │                               Orchestrated by         │
+    │                               core/pipeline.py        │
+    │                                                       │
+    └─────────────────────────────────────────────────────┘
+
+
+═════════════════════════════════════════════════════════════════════════════
+Key Metrics & Output Locations
+═════════════════════════════════════════════════════════════════════════════
+
+Performance Metrics:
+  • Ex-post Profit (€)       - Revenue minus costs and penalties
+  • System Imbalance (€)      - Penalty for power deviations
+  • Volume Violations (€)     - Penalty for reservoir violations
+  • Computation Time (s)      - Wall-clock execution time
+
+Output Locations:
+  • Training data:   DFL/outputs/noisy_data/
+  • Trained models:  DFL/outputs/trained_models/
+  • Benchmarks:      DFL/outputs/validation_results/
+  • Tables:          results/tables/
+  • Figures:         results/figures/
+
+═════════════════════════════════════════════════════════════════════════════

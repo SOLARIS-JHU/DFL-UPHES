@@ -1,42 +1,36 @@
+"""MIQP Global Linear Optimization
+
+MILP for pumped hydro using global linearization of nonlinear relationships.
+Input: 2024 price data (Data/price_data_2024.csv)
+Output: Results saved to script directory
 """
-MIQP Global Linear Optimization Script
-
-Mixed-Integer Quadratic Programming approach for pumped hydro energy storage optimization 
-using global linearization of nonlinear UPC and volume-head relationships.
-
-Input: 2024 price data from ../../Data/price_data_2024.csv
-Output: 
-- MILP_global_linear_results.csv (detailed hourly results)
-- MILP_global_linear_benchmark.csv (daily performance metrics)
-
-Python interactive is recommended for running this script.
-"""
-# %% Import libraries
 import torch
 import dill as pickle
 import pandas as pd
 import sys
-# torch.autograd.set_detect_anomaly(True)
+import os
 import gurobipy as gp
 from gurobipy import GRB
-import matplotlib.pyplot as plt
-import dill as pickle
-import pandas as pd
-import sys
-import matplotlib.pyplot as plt
 import numpy as np
+import time
 
 device = torch.device("cpu")
 
-# load portfolio data 
-sys.path.append('../../Library')
-from V_H_relations import load_portfolio_data, gross_head, get_v_low
+# Setup paths to work from repo root or script directory
+script_dir = os.path.dirname(os.path.abspath(__file__))
+repo_root = os.path.abspath(os.path.join(script_dir, '../..'))
+os.chdir(script_dir)  # Always output to script directory
+
+# Add Library to path
+sys.path.insert(0, os.path.join(repo_root, 'Library'))
+from V_H_relations import load_portfolio_data
 load_portfolio_data()
-from V_H_relations import r, m, head_max, head_min, h_dead_up, h_normal_up, height_up, R, height_low, n, h_dead_low, h_normal_low, max_vol_up, max_vol_low, max_vol, ramp_down, ramp_up, min_vol_low, target_vol_up, target_vol_low, target_head
- 
-# load preprocessed functions & data
-with open('../../preprocess.pkl', 'rb') as f:
-    v_low_h_coeffs, h_v_coeffs, v_low_to_h_fitted, v_low_h_poly, h_vlow_coeff_lin, coefs_tur_lin, intercept_tur_lin, coefs_pump_lin, intercept_pump_lin, predict_q_linear_tur,predict_q_linear_pump, h_to_v_low_lin, h_fit, neg_min_fit, neg_max_fit, pos_min_fit, pos_max_fit, h_v_poly, h_v_coeffs, DA_price_hour, DA_price_quarter, h_to_v_low_fitted, predict_q_poly, neg_min, neg_max, pos_min, pos_max, prepare_and_fit_model, get_UPC_bound, LR_UPC_bound = pickle.load(f)
+from V_H_relations import head_max, head_min, max_vol_up, min_vol_low, target_vol_low, target_head
+
+# Load preprocessed data
+preprocess_path = os.path.join(repo_root, 'preprocess.pkl')
+with open(preprocess_path, 'rb') as f:
+    v_low_h_coeffs, h_v_coeffs, v_low_to_h_fitted, v_low_h_poly, h_vlow_coeff_lin, coefs_tur_lin, intercept_tur_lin, coefs_pump_lin, intercept_pump_lin, predict_q_linear_tur, predict_q_linear_pump, h_to_v_low_lin, h_fit, neg_min_fit, neg_max_fit, pos_min_fit, pos_max_fit, h_v_poly, h_v_coeffs, DA_price_hour, DA_price_quarter, h_to_v_low_fitted, predict_q_poly, neg_min, neg_max, pos_min, pos_max, prepare_and_fit_model, get_UPC_bound, LR_UPC_bound = pickle.load(f)
 
 head_init = 77.0 # Initial head value
 v_low_init = h_to_v_low_fitted(head_init) # Initial lower reservoir volume
@@ -45,10 +39,11 @@ v_low_init = float(v_low_init)
 # convert h_vlow_coeff_lin to python array
 h_vlow_coeff_lin = h_vlow_coeff_lin.detach().numpy()
 
-# %% Load price data function (same as MIQP_nn.py)
-def read_price_data(file_path="../../Data/price_data_2024.csv"):
-    """Read price data from the new CSV format."""
-    import os
+def read_price_data(file_path=None):
+    """Read price data from CSV format."""
+    if file_path is None:
+        file_path = os.path.join(repo_root, 'Data/price_data_2024.csv')
+
     if not os.path.exists(file_path):
         raise FileNotFoundError(f"Price data file not found: {file_path}")
     
@@ -73,26 +68,13 @@ def read_price_data(file_path="../../Data/price_data_2024.csv"):
         except Exception as e:
             print(f"Error parsing prices for {date}: {e}")
             continue
-    
+
     return price_data
 
-# %% MILP Optimizer
+
 class MILPOptimizer:
     def __init__(self, T, DA_prices, C_op=0.4, M_p=10000, h_init=head_init, h_min=head_min, h_max=head_max, v_low_init=v_low_init, v_low_target=target_vol_low, h_target=target_head):
-        """
-        MILP optimizer for initial pipeline points.
-        
-        Parameters:
-            T (int): Number of time periods.
-            DA_prices (list): Day-ahead prices for each period.
-            C_op (float): Operational cost coefficient.
-            M_p (float): Big-M constant.
-            h_min (float): Minimum head.
-            h_max (float): Maximum head.
-            v_low_init (float): Initial lower reservoir volume.
-            v_low_target (float): Target lower reservoir volume.
-            h_target (float): Target head value.
-        """
+        """Mixed Integer Linear Programming optimizer with mode-based constraints."""
         self.T = T
         self.DA_prices = DA_prices
         self.C_op = C_op
@@ -112,95 +94,66 @@ class MILPOptimizer:
         T = self.T
         M_p = self.M_p
 
-        # Decision Variables
-        # Continuous power variables (split into turbine and pump components)
-        self.p_T = self.model.addVars(T, lb=0, name="p_T")  # Turbine power (>=0)
-        self.p_P = self.model.addVars(T, lb=-GRB.INFINITY, ub=0, name="p_P")    # Pump power (<=0)
-        # Flow, head and lower reservoir volume variables
-        self.q   = self.model.addVars(T, lb=-GRB.INFINITY, name="q")
-        self.h   = self.model.addVars(T, lb=self.h_min, ub=self.h_max, name="h")
+        # Decision variables
+        self.p_T = self.model.addVars(T, lb=0, name="p_T")
+        self.p_P = self.model.addVars(T, lb=-GRB.INFINITY, ub=0, name="p_P")
+        self.q = self.model.addVars(T, lb=-GRB.INFINITY, name="q")
+        self.h = self.model.addVars(T, lb=self.h_min, ub=self.h_max, name="h")
         self.v_low = self.model.addVars(T, name="v_low")
-        
-        # Binary variables for mode selection:
-        # z_t^I: Idle, z_t^T: Turbine, z_t^P: Pump.
+
+        # Mode selection: Idle, Turbine, or Pump
         self.z_I = self.model.addVars(T, vtype=GRB.BINARY, name="z_I")
         self.z_T = self.model.addVars(T, vtype=GRB.BINARY, name="z_T")
         self.z_P = self.model.addVars(T, vtype=GRB.BINARY, name="z_P")
-        
-        # Mode selection: exactly one mode is active at each time t.
+
         for t in range(T):
-            self.model.addConstr(self.z_I[t] + self.z_T[t] + self.z_P[t] == 1, name=f"mode_sel_{t}")
-        
-        # Idle Mode Constraints: if idle (z_I=1) then p_t^T, p_t^P, and q_t are forced to zero.
+            self.model.addConstr(self.z_I[t] + self.z_T[t] + self.z_P[t] == 1)
+
+        # Idle mode: zero flow
         for t in range(T):
-            # self.model.addConstr(self.p_T[t] <= M_p * (1 - self.z_I[t]), name=f"idle_pT_{t}")
-            # self.model.addConstr(self.p_P[t] >= M_p * (1 - self.z_I[t]), name=f"idle_pP_{t}")
-            self.model.addConstr(self.q[t] <=  M_p * (1 - self.z_I[t]), name=f"idle_q_{t}")
-        
-        # Turbine Mode Constraints:
+            self.model.addConstr(self.q[t] <= M_p * (1 - self.z_I[t]))
+
+        # Turbine mode: power bounds and linearized UPC
         for t in range(T):
-            self.model.addConstr(self.p_T[t] >= pos_min_fit @ [self.h[t], 1.0] * self.z_T[t],
-                     name=f"turbine_min_{t}")
-            self.model.addConstr(self.p_T[t] <= pos_max_fit @ [self.h[t], 1.0] * self.z_T[t],
-                     name=f"turbine_max_{t}")
-        
-        # Pump Mode Constraints:
+            self.model.addConstr(self.p_T[t] >= pos_min_fit @ [self.h[t], 1.0] * self.z_T[t])
+            self.model.addConstr(self.p_T[t] <= pos_max_fit @ [self.h[t], 1.0] * self.z_T[t])
+
+        # Pump mode: power bounds and linearized UPC
         for t in range(T):
-            self.model.addConstr(self.p_P[t] >= neg_min_fit @ [self.h[t], 1.0] * self.z_P[t],
-                                 name=f"pump_min_{t}")
-            self.model.addConstr(self.p_P[t] <= neg_max_fit @ [self.h[t], 1.0] * self.z_P[t],
-                                 name=f"pump_max_{t}")
-        
-        # Flow Relation Constraints 
+            self.model.addConstr(self.p_P[t] >= neg_min_fit @ [self.h[t], 1.0] * self.z_P[t])
+            self.model.addConstr(self.p_P[t] <= neg_max_fit @ [self.h[t], 1.0] * self.z_P[t])
+
+        # Flow relationships
         for t in range(T):
-            # Turbine flow prediction
             q_tur = coefs_tur_lin @ [self.p_T[t], self.h[t]] + intercept_tur_lin
-            # Pump flow prediction
             q_pump = coefs_pump_lin @ [self.p_P[t], self.h[t]] + intercept_pump_lin
-            # Since only one of z_T or z_P is active (unless idle, in which case q_t=0),
-            # we model the flow as the sum of the contributions:
-            self.model.addConstr(
-            self.q[t] == q_tur * self.z_T[t] + q_pump * self.z_P[t],
-            name=f"flow_{t}"
-            )
-        
-        # Volume-Head Relationship and Dynamics
+            self.model.addConstr(self.q[t] == q_tur * self.z_T[t] + q_pump * self.z_P[t])
+
+        # Volume-head relationship and dynamics
         for t in range(T):
-            # Link lower reservoir volume to head using linear fit
-            self.model.addConstr(self.v_low[t] == h_vlow_coeff_lin @ [self.h[t],1], name=f"vol_head_{t}")
-            # Dynamics: v_low[t] = v_low[t-1] + 3600 * q_t[t]
+            self.model.addConstr(self.v_low[t] == h_vlow_coeff_lin @ [self.h[t], 1])
             if t == 0:
-                self.model.addConstr(self.v_low[t] == self.v_low_init + 3600 * self.q[t],
-                            name=f"vol_dyn_{t}")
+                self.model.addConstr(self.v_low[t] == self.v_low_init + 3600 * self.q[t])
             else:
-                self.model.addConstr(self.v_low[t] == self.v_low[t-1] + 3600 * self.q[t],
-                            name=f"vol_dyn_{t}")
-        
-        # # Initial Head Constraint:
-        # self.model.addConstr(self.h[0] == self.h_init, name="init_head")
-        
-        # Final Volume Constraint:
-        self.model.addConstr(self.v_low[T-1] <= self.v_low_target, name="vol_target")
-        
-        # Final Head Constraint:
-        self.model.addConstr(self.h[T-1] >= self.h_target, name="head_target")
-        
-        # Set the Objective:
-        # Maximize: sum_t [(p_t^T + p_t^P)*lambda_DA_t - C_op*(p_t^T + p_t^P)^2]
+                self.model.addConstr(self.v_low[t] == self.v_low[t-1] + 3600 * self.q[t])
+
+        # Terminal constraints
+        self.model.addConstr(self.v_low[T-1] <= self.v_low_target)
+        self.model.addConstr(self.h[T-1] >= self.h_target)
+
+        # Objective: maximize revenue - cost
         objective = gp.quicksum(
             (self.p_T[t] + self.p_P[t]) * self.DA_prices[t] -
-            self.C_op * (self.p_T[t] + self.p_P[t]) * (self.p_T[t] + self.p_P[t])
+            self.C_op * (self.p_T[t] + self.p_P[t]) ** 2
             for t in range(T)
         )
         self.model.setObjective(objective, GRB.MAXIMIZE)
-        
-        # Optional: set output parameters
         self.model.Params.OutputFlag = 1
 
     def solve(self):
-        """Optimize the MILP and return the decision variable values and metrics."""
+        """Solve MILP and return solution and metrics."""
         self.model.optimize()
-        
+
         metrics = {
             'Status': self.model.status,
             'SolveTime': self.model.Runtime,
@@ -212,30 +165,30 @@ class MILPOptimizer:
             'MIPGap': None,
             'ExpectedProfit': None
         }
-        
+
         if self.model.status == GRB.OPTIMAL:
             metrics['ObjectiveValue'] = self.model.objVal
             metrics['ObjectiveBound'] = self.model.objBound
             metrics['MIPGap'] = self.model.MIPGap
-            metrics['ExpectedProfit'] = self.model.objVal  # Assuming profit equals objective value
-            
+            metrics['ExpectedProfit'] = self.model.objVal
+
             results = {
                 'p_t_T': [self.p_T[t].X for t in range(self.T)],
                 'p_t_P': [self.p_P[t].X for t in range(self.T)],
-                'q_t':   [self.q[t].X for t in range(self.T)],
-                'h_t':   [self.h[t].X for t in range(self.T)],
+                'q_t': [self.q[t].X for t in range(self.T)],
+                'h_t': [self.h[t].X for t in range(self.T)],
                 'v_low': [self.v_low[t].X for t in range(self.T)],
-                'z_I':   [self.z_I[t].X for t in range(self.T)],
-                'z_T':   [self.z_T[t].X for t in range(self.T)],
-                'z_P':   [self.z_P[t].X for t in range(self.T)]
+                'z_I': [self.z_I[t].X for t in range(self.T)],
+                'z_T': [self.z_T[t].X for t in range(self.T)],
+                'z_P': [self.z_P[t].X for t in range(self.T)]
             }
-            
             return results, metrics
         else:
             print("No optimal solution found!")
             return None, metrics
 
-# %% Simulation Layer Classes (same as MIQP_nn.py)
+
+# Simplified HydroParameters for simulation
 class HydroParameters:
     def __init__(
         self,
@@ -277,37 +230,40 @@ class HydroParameters:
         self.h_to_v_low_fitted = h_to_v_low_fitted
         self.v_low_to_h_fitted = v_low_to_h_fitted
 
+
 class SimulationLayer:
+    """Simulate hourly operation with physical constraints."""
+
     def __init__(self, params):
         self.params = params
 
     def simulate_operation(self, p, q, h):
-        """Simulate hourly operation with physical constraints."""
+        """Simulate operation respecting physical bounds."""
         TH = self.params.time_horizon
-        p_list = []
-        q_list = []
-        h_list = []
-        v_list = []
+        p_list, q_list, h_list, v_list = [], [], [], []
 
         v_current = self.params.v_low_init
         v_list.append(v_current)
 
         for i in range(TH):
-            h_current = h[i]
             p_current = p[i]
             q_candidate = torch.zeros_like(p_current)
             p_clamped = p_current
 
-            if p_current > 0.5:  # Turbine mode
-                p_min_turb = self.params.pos_min(h_current)
-                p_max_turb = self.params.pos_max(h_current)
-                p_clamped = torch.clamp(p_current, min=p_min_turb, max=p_max_turb)
-                q_candidate = self.params.predict_q_poly(p_clamped.unsqueeze(0), h_current.unsqueeze(0)).squeeze(0)
-            elif p_current < -0.5:  # Pump mode
-                p_min_pump = self.params.neg_min(h_current)
-                p_max_pump = self.params.neg_max(h_current)
-                p_clamped = torch.clamp(p_current, min=p_min_pump, max=p_max_pump)
-                q_candidate = self.params.predict_q_poly(p_clamped.unsqueeze(0), h_current.unsqueeze(0)).squeeze(0)
+            if p_current > 0.5:  # Turbine
+                p_clamped = torch.clamp(
+                    p_current,
+                    min=self.params.pos_min(h[i]),
+                    max=self.params.pos_max(h[i])
+                )
+                q_candidate = self.params.predict_q_poly(p_clamped.unsqueeze(0), h[i].unsqueeze(0)).squeeze(0)
+            elif p_current < -0.5:  # Pump
+                p_clamped = torch.clamp(
+                    p_current,
+                    min=self.params.neg_min(h[i]),
+                    max=self.params.neg_max(h[i])
+                )
+                q_candidate = self.params.predict_q_poly(p_clamped.unsqueeze(0), h[i].unsqueeze(0)).squeeze(0)
 
             v_next = v_current + q_candidate * 3600
             out_of_bounds = (v_next > self.params.max_vol_up) | (v_next < self.params.min_vol_low)
@@ -315,8 +271,7 @@ class SimulationLayer:
             if out_of_bounds:
                 p_final = torch.zeros_like(p_current)
                 q_final = torch.zeros_like(q_candidate)
-                v_next = v_current
-                h_next = h_current
+                h_next = h[i]
             else:
                 p_final = p_clamped if p_current != 0 else torch.zeros_like(p_current)
                 q_final = q_candidate
@@ -330,52 +285,47 @@ class SimulationLayer:
 
         p_sim = torch.stack(p_list)
         q_sim = torch.stack(q_list)
-        h_sim = torch.stack(h_list[:-1])
+        h_sim = torch.stack(h_list)
         v_low_sim = torch.tensor(v_list[:-1], dtype=torch.float32)
-        
+
         return p_sim, q_sim, h_sim, v_low_sim
 
     def calc_profit(self, p_sim, p_opt, v_low_sim, DA_price):
-        """Calculate the daily profit from the hourly simulation."""
-        e_sim = p_sim
-        revenue = torch.sum(DA_price * e_sim)
+        """Calculate profit accounting for imbalances and volume constraints."""
+        revenue = torch.sum(DA_price * p_sim)
 
-        surplus_penalty_multiplier = -0.5
-        shortage_penalty_multiplier = -2.0
-
+        # System imbalance penalties
         SI_price = torch.where(
-            e_sim < p_opt,
-            shortage_penalty_multiplier * DA_price,
-            surplus_penalty_multiplier * DA_price
+            p_sim < p_opt,
+            -2.0 * DA_price,  # Shortage
+            -0.5 * DA_price   # Surplus
         )
-        
-        imbalance = e_sim - p_opt
-        penalty = imbalance * SI_price
-        SI_penalty = penalty.sum()
+        SI_penalty = torch.sum((p_sim - p_opt) * SI_price)
 
-        volume_deficit = max(0, v_low_sim[-1] - self.params.target_vol_low)
-        energy_loss = self.params.rho * volume_deficit * self.params.g * self.params.target_head * self.params.mu / 3.6e9
+        # Volume penalty
+        vol_deficit = max(0, v_low_sim[-1] - self.params.target_vol_low)
+        energy_loss = (self.params.rho * vol_deficit * self.params.g *
+                       self.params.target_head * self.params.mu / 3.6e9)
         volume_penalty = energy_loss * torch.median(DA_price)
 
-        operating_cost = self.params.operational_cost * torch.sum(p_sim**2)
+        operating_cost = self.params.operational_cost * torch.sum(p_sim ** 2)
         total_profit = revenue - operating_cost - SI_penalty - volume_penalty
-        
+
         return total_profit, SI_penalty, volume_penalty, operating_cost
 
-# %% Main execution function
+
 def run_milp_optimization():
-    """Run MILP optimization for all days in price database (same format as MIQP_nn.py)."""
+    """Run MILP optimization for all days in price database."""
     print("Loading price data...")
     price_data = read_price_data()
     
-    # Initialize result lists
     detailed_results = []
     benchmark_results = []
-    
+
     # Initialize simulation parameters
     head_init_val = torch.tensor(head_init, dtype=torch.float32, device=device)
     v_low_init_val = torch.tensor(v_low_init, dtype=torch.float32, device=device)
-    
+
     params = HydroParameters(
         head_init=head_init_val,
         v_low_init=v_low_init_val,
@@ -385,66 +335,51 @@ def run_milp_optimization():
         h_to_v_low_fitted=h_to_v_low_fitted,
         v_low_to_h_fitted=v_low_to_h_fitted
     )
-    
+
     simulator = SimulationLayer(params)
-    
-    # Get total number of dates
     total_dates = len(price_data)
-    
+
     # Process each day
     for idx, (date_str, prices_24h) in enumerate(price_data.items(), start=1):
-        print(f"Processing {date_str} ({idx}/{total_dates})...")
-        
+        print(f"Processing {date_str} ({idx}/{total_dates})...", end=" ")
+
         try:
-            import time
             start_time = time.time()
-            
-            # Create and solve optimizer
-            T = 24
-            optimizer = MILPOptimizer(T, prices_24h)
+
+            optimizer = MILPOptimizer(24, prices_24h)
             results, metrics = optimizer.solve()
-            
             solution_time = time.time() - start_time
-            
+
             if results is None:
-                print(f"No optimal solution found for {date_str}!")
+                print("No solution")
                 continue
-            
-            # Post-process results to ensure idle mode values are exactly 0
-            z_I_values = results['z_I']
-            corrected_p_t_T = results['p_t_T'].copy()
-            corrected_p_t_P = results['p_t_P'].copy()
-            corrected_q_t = results['q_t'].copy()
-            
-            for t in range(len(z_I_values)):
-                if z_I_values[t] > 0.5:  # If idle mode is active
-                    corrected_p_t_T[t] = 0.0
-                    corrected_p_t_P[t] = 0.0
-                    corrected_q_t[t] = 0.0
-            
-            results['p_t_T'] = corrected_p_t_T
-            results['p_t_P'] = corrected_p_t_P
-            results['q_t'] = corrected_q_t
-            
-            # Calculate total power and volume
-            power_values = [p_t_T + p_t_P for p_t_T, p_t_P in zip(results['p_t_T'], results['p_t_P'])]
+
+            # Correct idle mode values to 0
+            for t in range(24):
+                if results['z_I'][t] > 0.5:
+                    results['p_t_T'][t] = 0.0
+                    results['p_t_P'][t] = 0.0
+                    results['q_t'][t] = 0.0
+
+            # Calculate power and volume
+            power_values = [p_t + p_p for p_t, p_p in zip(results['p_t_T'], results['p_t_P'])]
             volume_values = [h_vlow_coeff_lin[0] * h + h_vlow_coeff_lin[1] for h in results['h_t']]
-            
+
             # Run simulation
             p_tensor = torch.tensor(power_values, dtype=torch.float32, device=device)
             q_tensor = torch.tensor(results['q_t'], dtype=torch.float32, device=device)
             h_tensor = torch.tensor(results['h_t'], dtype=torch.float32, device=device)
-            
+
             p_sim, q_sim, h_sim, v_low_sim = simulator.simulate_operation(p_tensor, q_tensor, h_tensor)
-            
-            # Calculate simulation profit
+
+            # Calculate profit
             da_prices_tensor = torch.tensor(prices_24h, dtype=torch.float32, device=device)
             profit, si_penalty, vol_penalty, op_cost = simulator.calc_profit(
                 p_sim, p_tensor[:len(p_sim)], v_low_sim, da_prices_tensor[:len(p_sim)]
             )
-            
-            # Store detailed results (same format as MIQP_nn.py)
-            for hour in range(T):
+
+            # Store results
+            for hour in range(24):
                 detailed_results.append({
                     'date': date_str,
                     'hour': hour,
@@ -454,8 +389,7 @@ def run_milp_optimization():
                     'flow': results['q_t'][hour],
                     'price': prices_24h[hour]
                 })
-            
-            # Store benchmark results (same format as MIQP_nn.py)
+
             benchmark_results.append({
                 'Date': date_str,
                 'Solving Time (s)': solution_time,
@@ -469,24 +403,19 @@ def run_milp_optimization():
                 'Op Cost (€)': op_cost.item(),
                 'Ex-post Profit (€)': profit.item()
             })
-            
-            print(f"Expected profit: {metrics['ExpectedProfit']:.2f} €, Ex-post profit: {profit.item():.2f} €")
-            
-        except Exception as e:
-            print(f"Error processing {date_str}: {e}")
-            continue
-    
-    # Save results (same format as MIQP_nn.py)
-    detailed_df = pd.DataFrame(detailed_results)
-    benchmark_df = pd.DataFrame(benchmark_results)
-    
-    detailed_df.to_csv("MILP_global_linear_results.csv", index=False)
-    benchmark_df.to_csv("MILP_global_linear_benchmark.csv", index=False)
-    
-    print(f"\nProcessing complete!")
-    print(f"Detailed results saved to MILP_global_linear_results.csv ({len(detailed_results)} rows)")
-    print(f"Benchmark results saved to MILP_global_linear_benchmark.csv ({len(benchmark_results)} rows)")
 
-# %% Execute
+            print(f"Profit: {profit.item():.2f} €")
+
+        except Exception as e:
+            print(f"Error: {e}")
+            continue
+
+    # Save results
+    pd.DataFrame(detailed_results).to_csv("MILP_global_linear_results.csv", index=False)
+    pd.DataFrame(benchmark_results).to_csv("MILP_global_linear_benchmark.csv", index=False)
+
+    print(f"\nDone! {len(detailed_results)} hourly records saved")
+
+
 if __name__ == "__main__":
     run_milp_optimization()

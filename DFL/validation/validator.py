@@ -11,6 +11,7 @@ import json
 import time
 import traceback
 import itertools
+import scipy.sparse
 from pathlib import Path
 from datetime import datetime
 
@@ -18,6 +19,19 @@ from ..data.loaders import load_data_for_validation, load_new_price_data
 from ..core.models import BoundedLogWeightPredictor
 from ..core.layers import TaylorRegressionLayer, OptiLayer, SimulationLayer
 from ..core.pipeline import RecursiveLinearizationPipeline
+
+# Monkey patch for scipy/ECOS compatibility (scipy 1.13+ changed sparse matrix API)
+# This patch adds get_shape() method to csc_array objects for backward compatibility with ECOS
+if hasattr(scipy.sparse, 'csc_array'):
+    _csc_array_cls = scipy.sparse.csc_array
+
+    # Add get_shape method to the class if it doesn't exist
+    if not hasattr(_csc_array_cls, 'get_shape'):
+        def get_shape_method(self):
+            """Return shape for backward compatibility with ECOS."""
+            return self.shape
+
+        _csc_array_cls.get_shape = get_shape_method
 
 
 def find_closest_date(new_price, historical_data):
@@ -68,8 +82,8 @@ def validate_single_configuration(config, params, device, new_price_data, histor
     """
     config_name = f"{architecture}_{num_layers}layer_{max_iterations}iter"
 
-    # Create output directory
-    config_dir = Path(f"./validation_results/{db_name}/{config_name}")
+    # Create output directory (centralized in outputs folder)
+    config_dir = Path(config.results_base_dir) / db_name / config_name
     config_dir.mkdir(exist_ok=True, parents=True)
 
     # Create benchmark CSV file
@@ -105,54 +119,58 @@ def validate_single_configuration(config, params, device, new_price_data, histor
             closest_date, distance = find_closest_date(new_price, historical_data)
             print(f"Closest historical date: {closest_date} (distance: {distance:.2f})")
 
-            # 2. Look for the pretrained model
-            model_path = Path(config.output_base_dir) / db_name / config_name / closest_date / "model.pt"
-
-            if not model_path.exists():
-                # Try best_model.pt as fallback
-                model_path = Path(config.output_base_dir) / db_name / config_name / closest_date / "best_model.pt"
-
-                if not model_path.exists():
-                    print(f"Warning: No model found at {model_path}. Skipping this date.")
-                    continue
-
-            # 3. Initialize weight network
-            weight_network = BoundedLogWeightPredictor(
-                input_size=4,
-                hidden_size=config.hidden_size,
-                num_layers=num_layers,
-                dropout=config.dropout,
-                time_horizon=params.time_horizon,
-                archetype=architecture,
-                init_w_p=config.init_w_p,
-                init_w_q=config.init_w_q,
-                init_w_h=config.init_w_h,
-                w_p_min=config.w_p_min,
-                w_p_max=config.w_p_max,
-                w_q_min=config.w_q_min,
-                w_q_max=config.w_q_max,
-                w_h_min=config.w_h_min,
-                w_h_max=config.w_h_max
-            ).to(device)
-
-            # 4. Load the pretrained weights
-            weight_network.load_state_dict(torch.load(model_path, map_location=device))
-            weight_network.eval()
-
-            # 5. Get initial conditions from closest date
+            # 2. Get initial conditions from closest date
             closest_data = historical_data[closest_date]
             power_init = closest_data['power'][:24].clone()
             head_init = closest_data['head'][:24].clone()
-            flow_init = params.predict_q_poly(power_init, head_init)
+            flow_init = params.predict_q_poly(power_init.unsqueeze(0), head_init.unsqueeze(0)).squeeze(0)
 
-            # 6. Predict weights
-            x = torch.stack([new_price, power_init, flow_init, head_init], dim=1)
+            # 3. Determine weights based on configuration
+            if config.use_neural_network:
+                # Neural network variant: load model and predict weights
+                model_path = Path(config.output_base_dir) / db_name / config_name / closest_date / "best_model.pt"
 
-            with torch.no_grad():
-                log_w_p, log_w_q, log_w_h = weight_network(x)
-                w_p = torch.exp(log_w_p)
-                w_q = torch.exp(log_w_q)
-                w_h = torch.exp(log_w_h)
+                if not model_path.exists():
+                    print(f"Warning: No best model found at {model_path}. Skipping this date.")
+                    continue
+
+                # Initialize weight network
+                weight_network = BoundedLogWeightPredictor(
+                    input_size=4,
+                    hidden_size=config.hidden_size,
+                    num_layers=num_layers,
+                    dropout=config.dropout,
+                    time_horizon=params.time_horizon,
+                    archetype=architecture,
+                    init_w_p=config.init_w_p,
+                    init_w_q=config.init_w_q,
+                    init_w_h=config.init_w_h,
+                    w_p_min=config.w_p_min,
+                    w_p_max=config.w_p_max,
+                    w_q_min=config.w_q_min,
+                    w_q_max=config.w_q_max,
+                    w_h_min=config.w_h_min,
+                    w_h_max=config.w_h_max
+                ).to(device)
+
+                # Load the pretrained weights
+                weight_network.load_state_dict(torch.load(model_path, map_location=device))
+                weight_network.eval()
+
+                # Predict weights using the network
+                x = torch.stack([new_price, power_init, flow_init, head_init], dim=1)
+
+                with torch.no_grad():
+                    log_w_p, log_w_q, log_w_h = weight_network(x)
+                    w_p = torch.exp(log_w_p)
+                    w_q = torch.exp(log_w_q)
+                    w_h = torch.exp(log_w_h)
+            else:
+                # Ablation variant: use fixed weights (no neural network)
+                print(f"Using fixed weights: w_p={config.fixed_w_p}, w_q={config.fixed_w_q}, w_h={config.fixed_w_h}")
+                w_p = torch.ones(24, device=device) * config.fixed_w_p
+                w_q = torch.ones(24, device=device) * config.fixed_w_q
+                w_h = torch.ones(24, device=device) * config.fixed_w_h
 
             # 7. Run recursive linearization
             p_current = power_init.clone().detach()
@@ -222,6 +240,10 @@ def validate_single_configuration(config, params, device, new_price_data, histor
                 'new_price': new_price.detach().cpu().numpy(),
                 'closest_price': closest_data['price'][:24].detach().cpu().numpy(),
                 'closest_power': closest_data['power'][:24].detach().cpu().numpy(),
+                'new_date': new_date,
+                'closest_date': closest_date,
+                'distance': distance,
+                'processing_time': processing_time,
                 'expected_profit': expected_profit.item(),
                 'ex_post_profit': ex_post_profit.item(),
                 'SI_penalty': SI_penalty.item(),
@@ -272,7 +294,7 @@ def validate_single_configuration(config, params, device, new_price_data, histor
     return results
 
 
-def comprehensive_validation(config, params, device, new_price_file="../Data/price_data_2024.csv"):
+def comprehensive_validation(config, params, device, new_price_file="./Data/price_data_2024.csv"):
     """
     Perform comprehensive validation across all model configurations.
 
@@ -294,29 +316,60 @@ def comprehensive_validation(config, params, device, new_price_file="../Data/pri
         print("Error: Could not load new price data")
         return
 
-    # Define validation parameters
-    noise_levels = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]
+    # Define validation parameters (must match pretraining)
+    noise_levels = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]  # Excludes 0% noise
     architectures = [config.architecture] if config.use_neural_network else ['NoNN']
     num_layers_list = [config.num_layers] if config.use_neural_network else [0]
-    max_iterations_list = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    max_iterations_list = [config.max_iterations]  # Use iteration count from config
 
-    # Create master results directory
-    master_dir = Path("./validation_results/comprehensive")
+    # Create master results directory (centralized in outputs folder)
+    master_dir = Path(config.results_base_dir) / "comprehensive"
     master_dir.mkdir(exist_ok=True, parents=True)
 
-    # Create master benchmark file
+    # Create master benchmark file (append mode to preserve previous results)
     master_benchmark_file = master_dir / "master_validation_benchmarks.csv"
-    with open(master_benchmark_file, 'w', newline='') as f:
-        writer = csv.writer(f)
-        writer.writerow([
-            'Database', 'Noise_Level', 'Architecture', 'Num_Layers', 'Max_Iterations',
-            'New_Date', 'Closest_Historical_Date', 'Distance_Metric',
-            'Expected_Profit', 'Ex_post_Profit', 'SI_Penalty',
-            'Volume_Penalty', 'Operating_Cost', 'Processing_Time_Seconds',
-            'Timestamp'
-        ])
+    file_exists = master_benchmark_file.exists()
 
-    best_configs = {}
+    header = []
+    base_columns = [
+        'Database', 'Noise_Level', 'Architecture', 'Num_Layers', 'Max_Iterations',
+        'New_Date', 'Closest_Historical_Date', 'Distance_Metric',
+        'Expected_Profit', 'Ex_post_Profit', 'SI_Penalty',
+        'Volume_Penalty', 'Operating_Cost', 'Processing_Time_Seconds',
+        'Timestamp'
+    ]
+    columns = base_columns + ['Method_Type']
+    include_method_type = True
+
+    if file_exists:
+        with open(master_benchmark_file, 'r', newline='') as f:
+            reader = csv.reader(f)
+            header = next(reader, [])
+        if header:
+            columns = header
+            include_method_type = 'Method_Type' in header
+
+    # Only write header if file is new or empty
+    if not file_exists or not header:
+        with open(master_benchmark_file, 'w', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow(columns)
+
+    # Set method type based on variant
+    variant = str(config.variant_name).upper()
+    if variant == "GL":
+        method_type = "DFL-GL-RS"
+    elif variant == "PW":
+        method_type = "DFL-PW-RS"
+    elif variant == "PW-NO-REC":
+        method_type = "DFL-PW-no-Rec"
+    elif variant == "ABLATION" or not config.use_neural_network:
+        method_type = "DFL-PW-no-NN"
+    else:
+        # Fallback
+        method_type = "DFL-RS"
+
+    # REMOVED: best_configurations.json generation (user will manually select best iteration)
 
     # Total configurations
     databases = noise_levels + ['random_samples']
@@ -326,15 +379,21 @@ def comprehensive_validation(config, params, device, new_price_file="../Data/pri
     # Iterate through all configurations
     for db_source in databases:
         if db_source == 'random_samples':
+            # Load from generated noisy data directory
             file_path = config.get_data_file_pattern(random_samples=True)
-            db_name = file_path.replace('.csv', '')
+            # Use the source data name for organizing output models
+            source_file_path = config.get_data_file_pattern(random_samples=True)
+            db_name = Path(source_file_path).stem
             noise_level = None
         else:
+            # Load from generated noisy data directory
             file_path = config.get_data_file_pattern(noise_level=db_source)
-            db_name = file_path.replace('.csv', '')
+            # Use the source data name for organizing output models
+            source_file_path = config.get_data_file_pattern(noise_level=db_source)
+            db_name = Path(source_file_path).stem
             noise_level = db_source
 
-        # Load historical data
+        # Load historical data from noisy files
         historical_data = load_data_for_validation(file_path, db_name, config, device)
         if not historical_data:
             print(f"Warning: Could not load historical data for {db_name}")
@@ -356,26 +415,31 @@ def comprehensive_validation(config, params, device, new_price_file="../Data/pri
 
             # Update master benchmark file
             for result in results:
+                row_data = {
+                    'Database': db_name,
+                    'Noise_Level': noise_level if noise_level is not None else 'random',
+                    'Architecture': arch,
+                    'Num_Layers': num_layers,
+                    'Max_Iterations': max_iter,
+                    'New_Date': result.get('new_date', 'N/A'),
+                    'Closest_Historical_Date': result.get('closest_date', 'N/A'),
+                    'Distance_Metric': result.get('distance', 'N/A'),
+                    'Expected_Profit': f"{result['expected_profit']:.2f}",
+                    'Ex_post_Profit': f"{result['ex_post_profit']:.2f}",
+                    'SI_Penalty': f"{result['SI_penalty']:.2f}",
+                    'Volume_Penalty': f"{result['volume_penalty']:.2f}",
+                    'Operating_Cost': f"{result['operating_cost']:.2f}",
+                    'Processing_Time_Seconds': result.get('processing_time', 'N/A'),
+                    'Timestamp': start_timestamp
+                }
+                if include_method_type:
+                    row_data['Method_Type'] = method_type
+
                 with open(master_benchmark_file, 'a', newline='') as f:
                     writer = csv.writer(f)
-                    writer.writerow([
-                        db_name, noise_level if noise_level else 'random',
-                        arch, num_layers, max_iter,
-                        result.get('new_date', 'N/A'),
-                        result.get('closest_date', 'N/A'),
-                        result.get('distance', 'N/A'),
-                        f"{result['expected_profit']:.2f}",
-                        f"{result['ex_post_profit']:.2f}",
-                        f"{result['SI_penalty']:.2f}",
-                        f"{result['volume_penalty']:.2f}",
-                        f"{result['operating_cost']:.2f}",
-                        result.get('processing_time', 'N/A'),
-                        start_timestamp
-                    ])
+                    writer.writerow([row_data.get(col, '') for col in columns])
 
-    # Save best configurations
-    with open(master_dir / "best_configurations.json", 'w') as f:
-        json.dump(best_configs, f, indent=4)
+    # REMOVED: best_configurations.json generation (user will manually select best iteration)
 
     end_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     print(f"\nComprehensive validation completed!")

@@ -3,17 +3,29 @@
 Generate noisy training datasets from MIQP results.
 
 This script generates multiple noisy variants of the original MIQP optimization results:
-1. Relative noise datasets: 0%, 10%, 20%, ..., 80% noise
+1. Relative noise datasets: 10%, 20%, ..., 80% noise
 2. Random samples dataset: Random power within feasible ranges preserving modes
 
 Usage:
     python generate_noisy_data.py --variant GL  # For Global Linear variant
     python generate_noisy_data.py --variant PW  # For Piecewise variant
+    python generate_noisy_data.py --variant GL --random-samples  # Include random samples
 """
 
 import sys
 import argparse
-sys.path.append('..')
+import numpy as np
+import torch
+import os
+
+# Add repository root to Python path to enable DFL imports
+repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+if repo_root not in sys.path:
+    sys.path.insert(0, repo_root)
+
+# Set random seed for reproducibility
+np.random.seed(42)
+torch.manual_seed(42)
 
 # Import configurations
 from DFL.config.gl_config import GLConfig
@@ -35,8 +47,8 @@ def main():
     parser = argparse.ArgumentParser(description='Generate noisy training datasets')
     parser.add_argument('--variant', type=str, choices=['GL', 'PW'], default='PW',
                         help='Variant to use (GL=Global Linear, PW=Piecewise)')
-    parser.add_argument('--noise-levels', type=str, default='0.0,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8',
-                        help='Comma-separated noise levels (e.g., "0.1,0.2,0.3")')
+    parser.add_argument('--noise-levels', type=str, default='0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8',
+                        help='Comma-separated noise levels (e.g., "0.1,0.2,0.3") - excludes 0% noise')
     parser.add_argument('--random-samples', action='store_true',
                         help='Also generate random samples dataset')
     args = parser.parse_args()
@@ -76,6 +88,7 @@ def main():
 
     print(f"\nConfiguration: {config}")
     print(f"Original MIQP file: {config.get_miqp_file_path()}")
+    print(f"Output data directory: {config.data_dir}")
 
     # 6. Initialize HydroParameters
     params = HydroParameters(
@@ -141,18 +154,18 @@ def main():
     print("\n" + "="*80)
     print("Noise generation completed!")
     print("="*80)
-    print("\nGenerated files:")
+    print("\nGenerated files in: " + config.data_dir)
     for noise_level in noise_levels:
-        filename = config.get_data_file_pattern(noise_level=noise_level)
-        print(f"  - {filename}")
+        filepath = config.get_results_file(noise_level=noise_level)
+        print(f"  - {filepath}")
 
     if args.random_samples:
-        filename = config.get_data_file_pattern(random_samples=True)
-        print(f"  - {filename}")
+        filepath = config.get_results_file(random_samples=True)
+        print(f"  - {filepath}")
 
     print("\nYou can now use these files for pretraining:")
-    print("  python example_pretraining_gl.py")
-    print("  python example_pretraining_pw.py")
+    print(f"  python DFL/scripts/run_pretraining_gl.py")
+    print(f"  python DFL/scripts/run_pretraining_pw.py")
 
 
 if __name__ == "__main__":

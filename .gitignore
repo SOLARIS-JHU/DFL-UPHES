@@ -189,3 +189,16 @@ cython_debug/
 *.pth
 *.ckpt
 *.onnx
+
+# Claude config folder
+.claude/
+
+# Claude context files
+CLAUDE.md
+AGENTS.md
+
+# Other AI/LLM related files (Optional)
+.cursorrules
+.windsurf/
+prompts/
+*.prompt
