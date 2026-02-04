@@ -575,7 +575,7 @@ python DFL/scripts/run_pretraining_gl.py --n-jobs 4
 
 - 📋 [**DFL/README.md**](DFL/README.md) - DFL framework-specific documentation
 - 🔄 [**WORKFLOW_CONFIGURATION.md**](WORKFLOW_CONFIGURATION.md) - Workflow variant descriptions
-- 📊 [**docs/README_DIAGRAM_SECTION.md**](docs/README_DIAGRAM_SECTION.md) - Mermaid diagrams and architecture
+- 📊 [**docs/repository_graphs.md**](docs/repository_graphs.md) - Mermaid diagrams and architecture
 - 📓 [**docs/dfl_uphes_mvp.ipynb**](docs/dfl_uphes_mvp.ipynb) - Interactive tutorial notebook
 
 <!-- ### Legacy vs. Refactored Code
