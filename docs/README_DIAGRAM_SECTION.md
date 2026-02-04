@@ -12,29 +12,33 @@ The complete DFL-for-UPHES pipeline follows this workflow:
 
 ```mermaid
 flowchart TD
-    A[preprocessing.py] --> B{MIQP Baselines}
-    B --> C[Global Linear<br/>MIQP/MIQP_linear/]
-    B --> D[Piecewise<br/>MIQP/MIQP_piecewise/]
+    subgraph Canvas1[" "]
+        direction TD
+        A[preprocessing.py] --> B{MIQP Baselines}
+        B --> C[Global Linear<br/>MIQP/MIQP_linear/]
+        B --> D[Piecewise<br/>MIQP/MIQP_piecewise/]
 
-    C --> E[Generate Noisy Data<br/>DFL/scripts/generate_noisy_data.py]
-    D --> E
+        C --> E[Generate Noisy Data<br/>DFL/scripts/generate_noisy_data.py]
+        D --> E
 
-    E --> F[Train DFL-GL<br/>run_pretraining_gl.py]
-    E --> G[Train DFL-PW<br/>run_pretraining_pw.py]
+        E --> F[Train DFL-GL<br/>run_pretraining_gl.py]
+        E --> G[Train DFL-PW<br/>run_pretraining_pw.py]
 
-    F --> H[Validate GL<br/>run_validation_gl.py]
-    G --> I[Validate PW<br/>run_validation_pw.py]
+        F --> H[Validate GL<br/>run_validation_gl.py]
+        G --> I[Validate PW<br/>run_validation_pw.py]
 
-    F --> J[Ablation Study<br/>run_ablation_study.py]
-    G --> J
+        F --> J[Ablation Study<br/>run_ablation_study.py]
+        G --> J
 
-    H --> K{Results Analysis}
-    I --> K
-    J --> K
+        H --> K{Results Analysis}
+        I --> K
+        J --> K
 
-    K --> L[Generate Tables<br/>results/print_tables.py]
-    K --> M[Generate Visualizations<br/>results/visualization.py]
+        K --> L[Generate Tables<br/>results/print_tables.py]
+        K --> M[Generate Visualizations<br/>results/visualization.py]
+    end
 
+    style Canvas1 fill:#F7F7F7,stroke:#DDDDDD,stroke-width:1px
     style A fill:#E6F3FF
     style B fill:#87CEEB
     style E fill:#DDA0DD
@@ -101,18 +105,22 @@ The DFL framework consists of four differentiable components trained end-to-end:
 
 ```mermaid
 flowchart LR
-    subgraph DFL["DFL Framework"]
-        direction TB
-        A[Neural Penalty<br/>Predictor<br/>LSTM] --> B[Local<br/>Linearization<br/>Layer]
-        B --> C[Differentiable<br/>QP Solver<br/>CVXPYLayers]
-        C --> D[Physical<br/>Simulator]
-        D -.Recursive<br/>Feedback.-> B
+    subgraph Canvas2[" "]
+        direction LR
+        subgraph DFL["DFL Framework"]
+            direction TB
+            A[Neural Penalty<br/>Predictor<br/>LSTM] --> B[Local<br/>Linearization<br/>Layer]
+            B --> C[Differentiable<br/>QP Solver<br/>CVXPYLayers]
+            C --> D[Physical<br/>Simulator]
+            D -.Recursive<br/>Feedback.-> B
+        end
+
+        Input[Price Data] --> DFL
+        MIQP[MIQP Results] --> DFL
+        DFL --> Output[Optimal Schedule]
     end
 
-    Input[Price Data] --> DFL
-    MIQP[MIQP Results] --> DFL
-    DFL --> Output[Optimal Schedule]
-
+    style Canvas2 fill:#F7F7F7,stroke:#DDDDDD,stroke-width:1px
     style A fill:#DDA0DD
     style B fill:#87CEEB
     style C fill:#98FB98
