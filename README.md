@@ -262,8 +262,6 @@ python results/aggregate_validation_results.py
 - **DFL-PW-no-Rec**: PW no-recursion (1 iteration, LSTM)
 - **DFL-PW-no-NN**: PW no-neural-network (7 iterations, fixed weights)
 
-For detailed configuration information, see [WORKFLOW_CONFIGURATION.md](WORKFLOW_CONFIGURATION.md).
-
 #### Step 7: Generate Tables and Visualizations
 
 Generate publication-quality tables and plots:
@@ -574,7 +572,6 @@ python DFL/scripts/run_pretraining_gl.py --n-jobs 4
 ### Core Documentation
 
 - 📋 [**DFL/README.md**](DFL/README.md) - DFL framework-specific documentation
-- 🔄 [**WORKFLOW_CONFIGURATION.md**](WORKFLOW_CONFIGURATION.md) - Workflow variant descriptions
 - 📊 [**docs/repository_graphs.md**](docs/repository_graphs.md) - Mermaid diagrams and architecture
 - 📓 [**docs/dfl_uphes_mvp.ipynb**](docs/dfl_uphes_mvp.ipynb) - Interactive tutorial notebook
 
