@@ -171,15 +171,15 @@ cython_debug/
 .pypirc
 
 # === Project outputs / figures / large binaries ===
-*.png
 *.jpg
 *.jpeg
 *.gif
 *.tif
 *.tiff
 *.bmp
-*.svg
-*.pdf
+*.zip
+*.7z
+*.tex
 
 *.npy
 *.npz
@@ -187,3 +187,16 @@ cython_debug/
 *.pth
 *.ckpt
 *.onnx
+
+# Claude config folder
+.claude/
+
+# Claude context files
+CLAUDE.md
+AGENTS.md
+
+# Other AI/LLM related files (Optional)
+.cursorrules
+.windsurf/
+prompts/
+*.prompt
