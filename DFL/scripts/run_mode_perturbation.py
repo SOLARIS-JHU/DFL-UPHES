@@ -263,12 +263,18 @@ def main():
         if not model_path.exists():
             print(f"  [skip] no model for {date_str}")
             continue
-        with suppress_stdout_fd():
-            r = run_dfl(d['power'], d['head'], d['price'], params, config, model_path, device)
-        base_profits.append(r['ex_post'])
+        try:
+            with suppress_stdout_fd():
+                r = run_dfl(d['power'], d['head'], d['price'], params, config, model_path, device)
+            r['failed'] = 0
+        except Exception as ex:
+            r = dict(ex_post=np.nan, SI=np.nan, vol=np.nan, failed=1)
+            print(f"  [solver-fail] baseline {date_str}: {type(ex).__name__}")
+        if r['failed'] == 0:
+            base_profits.append(r['ex_post'])
         rows.append(dict(flip_type=args.flip_type, rho=0, seed=-1, date=date_str,
                          n_flipped=0, **r))
-    print(f"  baseline mean ex-post profit = {np.mean(base_profits):.1f} EUR "
+    print(f"  baseline mean ex-post profit = {np.nanmean(base_profits):.1f} EUR "
           f"(n={len(base_profits)})")
 
     # --- Perturbation sweep ---
@@ -276,6 +282,7 @@ def main():
         for seed in range(args.seeds):
             rng = np.random.default_rng(1000 * rho + seed)
             profits = []
+            n_fail = 0
             for date_str, d in days.items():
                 model_path = (Path(config.output_base_dir) / MODEL_DB /
                               f"{config.architecture}_{config.num_layers}layer_{config.max_iterations}iter" /
@@ -284,13 +291,19 @@ def main():
                     continue
                 p_pert, n_flip = perturb_modes(d['power'], d['head'], d['price'],
                                                params, args.flip_type, rho, rng)
-                with suppress_stdout_fd():
-                    r = run_dfl(p_pert, d['head'], d['price'], params, config, model_path, device)
-                profits.append(r['ex_post'])
+                try:
+                    with suppress_stdout_fd():
+                        r = run_dfl(p_pert, d['head'], d['price'], params, config, model_path, device)
+                    r['failed'] = 0
+                    profits.append(r['ex_post'])
+                except Exception as ex:
+                    r = dict(ex_post=np.nan, SI=np.nan, vol=np.nan, failed=1)
+                    n_fail += 1
                 rows.append(dict(flip_type=args.flip_type, rho=rho, seed=seed,
                                  date=date_str, n_flipped=n_flip, **r))
             print(f"  rho={rho} seed={seed}: mean ex-post profit = "
-                  f"{np.mean(profits):.1f} EUR (n={len(profits)})")
+                  f"{np.nanmean(profits) if profits else float('nan'):.1f} EUR "
+                  f"(n={len(profits)}, solver-fails={n_fail})")
 
     # Write CSV
     with open(out_path, 'w', newline='') as f:
@@ -302,7 +315,12 @@ def main():
     # Summary table by rho
     dfres = pd.DataFrame(rows)
     print("\n=== Summary: mean ex-post profit by rho ===")
-    summ = dfres.groupby('rho')['ex_post'].agg(['mean', 'std', 'count'])
+    summ = dfres.groupby('rho').agg(
+        mean_profit=('ex_post', 'mean'),
+        std_profit=('ex_post', 'std'),
+        n_ok=('failed', lambda s: int((s == 0).sum())),
+        n_fail=('failed', lambda s: int((s == 1).sum())),
+    )
     print(summ.to_string())
 
 
