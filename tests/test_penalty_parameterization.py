@@ -70,3 +70,25 @@ def test_calc_profit_volume_penalty_scales_with_multiplier():
     # Non-zero penalty under a real deficit, and exactly doubled by a 2x multiplier.
     assert vol_base.item() > 0
     assert abs(vol_scaled.item() - 2.0 * vol_base.item()) < 1e-4
+
+
+from DFL.scripts.rescore_miqp_penalties import rescore_schedule
+
+
+def test_rescore_schedule_matches_calc_profit_revenue_and_opcost():
+    # A fully feasible schedule (sim == opt) under default penalties.
+    DA = [10.0, 20.0, 5.0]
+    power = [1.0, -2.0, 0.0]
+    out = rescore_schedule(
+        power=power, DA_price=DA,
+        si_shortage_mult=-2.0, si_surplus_mult=-0.5, vol_water_value_mult=1.0,
+        operational_cost=0.4,
+        final_volume=300000.0, target_vol_low=300000.0,  # no deficit
+        rho=1000.0, g=9.81, mu=0.9, target_head=75.0,
+    )
+    # revenue = 10*1 + 20*-2 + 5*0 = -30 ; op = 0.4*(1+4+0)=2.0 ; SI=0 ; vol=0
+    assert abs(out["revenue"] - (-30.0)) < 1e-6
+    assert abs(out["operating_cost"] - 2.0) < 1e-6
+    assert abs(out["SI_penalty"]) < 1e-6
+    assert abs(out["volume_penalty"]) < 1e-6
+    assert abs(out["ex_post_profit"] - (-32.0)) < 1e-6
