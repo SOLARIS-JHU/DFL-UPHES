@@ -23,6 +23,7 @@ import pandas as pd
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from matplotlib.ticker import MultipleLocator
 
 repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 if repo_root not in sys.path:
@@ -95,8 +96,11 @@ def main():
         ax.axvline(NATURAL_RATE, color='black', ls='--', lw=0.7)
         ax.set_title(title, color=color)
         ax.set_ylim(-6500, 4500)
+        ax.yaxis.set_major_locator(MultipleLocator(2000))
+        ax.yaxis.set_minor_locator(MultipleLocator(1000))
         ax.axhline(0, color='0.7', lw=0.5)
-        ax.grid(True, alpha=0.3)
+        ax.grid(True, which='major', alpha=0.35)
+        ax.grid(True, which='minor', alpha=0.15)
 
         # right axis: infeasibility rate (shaded)
         ax2 = ax.twinx()
