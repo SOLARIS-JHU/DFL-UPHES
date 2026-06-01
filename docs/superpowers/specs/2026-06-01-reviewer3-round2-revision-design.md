@@ -99,7 +99,14 @@ under alternative penalty settings (cheap; reuses `calc_profit`):
 Show the qualitative conclusion (DFL-PW ≈ or > MIQP-PW; large speedup) is
 invariant across settings. Compact table + short paragraph. Both DFL and the
 MIQP baseline are re-scored under the *same* penalties, so relative ranking is
-the honest comparison. (Breadth TBD with user — default both SI & Vol.)
+the honest comparison.
+
+**Resolved in dedicated spec:** see
+`2026-06-01-reviewer3-issue2-penalty-sensitivity-design.md`. Key refinement:
+MIQP-PW is **re-scored only** (no SI/volume terms in its objective), but DFL is
+**retrained per cell** (the penalties are its training loss). Grid is 6 cells,
+one-at-a-time: SI {1×/1×, 1.5×/0.75×, 2×/0.5×} and Vol {0.8×, 1.0×, 1.2×}×median.
+Canonical training set = random samples (the manuscript's headline set).
 
 ## Issue 3 — Clear train/val/test description
 Add an "Experimental Setup / Data Pipeline" paragraph: explicit sample counts
