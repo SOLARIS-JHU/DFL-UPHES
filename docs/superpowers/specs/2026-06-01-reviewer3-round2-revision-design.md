@@ -59,13 +59,24 @@ idle↔active vs turbine↔pump counts. Anchors what fraction/type of mode
 corruption is realistic.
 
 ### Deliverable B — Controlled stratified flip sweep
-Starting from the MIQP-PW warm-start per day, flip ρ randomly chosen hours, run
-DFL refinement (solver-free), record mean ex-post profit. Two sweeps:
-idle↔active only, and turbine↔pump only. ρ ∈ {1,2,3,4,5} hours, 3 random seeds
-each (expand if noisy), averaged over the 19 days. When flipping *into* an active
-mode, draw power within that mode's head-dependent feasible envelope so the
-corrupted warm-start is itself feasible. Output: profit-vs-ρ curves with a
-vertical marker at the natural disagreement rate from Deliverable A.
+Starting from the MIQP-PW warm-start per day, flip ρ hours, run DFL refinement
+(solver-free), record mean ex-post profit. ρ ∈ {1,2,3,4,5} hours, 3 seeds each
+(expand if noisy), averaged over the 19 days. Hours are chosen by "most
+uncertain commitment", NOT uniformly at random:
+
+- **active → idle**: rank active hours by |p| ascending; flip the ρ smallest-|p|
+  active hours to idle (p=0). Smallest |p| = closest to the `p_min^m(h)` floor =
+  most marginal commitment = most plausible/cheapest de-commit.
+- **idle → active**: rank idle hours by price "temptation"; activate the ρ most
+  temptingly-priced idle hours into the economically-consistent mode (turbine at
+  high price, pump at low price), drawing power within that mode's head-dependent
+  `[p_min^m(h), p_max^m(h)]` envelope so the warm-start stays feasible.
+- **turbine ↔ pump**: flip the ρ lowest-|p| active hours' sign (least-bad sign
+  reversals; if even these hurt, the catastrophe point is made).
+
+**Execution order: idle→active FIRST, review, then decide on the rest.**
+Output: profit-vs-ρ curves with a vertical marker at the natural disagreement
+rate from Deliverable A.
 
 ### Implementation
 New script `DFL/scripts/run_mode_perturbation.py` reusing the validator's DFL
