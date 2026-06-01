@@ -104,18 +104,14 @@ def main():
         ax2.fill_between(g.index, 0, g['infeas_pct'], color=color, alpha=0.12)
         ax2.set_ylim(0, 100)
         ax2.set_yticks([0, 50, 100])
-        ax2.tick_params(labelsize=6)
-        # only show right-axis label on rightmost column
-        if suffix in ('idle2pump', 'pump2idle', 'pump2turbine'):
-            ax2.set_ylabel('infeasible (%)', fontsize=6)
-        else:
-            ax2.set_yticklabels([])
+        ax2.tick_params(labelsize=7)
+        ax2.set_ylabel('infeasible (%)', fontsize=7)
 
     # shared labels
     for ax in axes[3:]:
         ax.set_xlabel("Corrupted modes (hours)")
     for ax in (axes[0], axes[3]):
-        ax.set_ylabel("Ex-post profit (EUR)")
+        ax.set_ylabel("Ex-post profit (€)", fontsize=7)
 
     # single shared legend (profit lines + infeasibility patch)
     from matplotlib.lines import Line2D
