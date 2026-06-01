@@ -143,8 +143,8 @@ def aggregate_dfl_profit(config):
     df = pd.read_csv(src)
     ex_post = df["Ex_post_Profit"].astype(float)
     si = df["SI_Penalty"].astype(float)
-    vol = df.iloc[:, 6].astype(float)   # Volume_Penalty column (7th)
-    t = df.iloc[:, 8].astype(float)     # Processing_Time_Seconds column (9th)
+    vol = df["Volume_Penalty"].astype(float)
+    t = df["Processing_Time_Seconds"].astype(float)
     return dict(dfl_profit_mean=ex_post.mean(), dfl_profit_std=ex_post.std(),
                 dfl_si=si.mean(), dfl_vol=vol.mean(), dfl_time=t.mean(),
                 dfl_n=len(ex_post))
@@ -158,13 +158,24 @@ def run_cell(cell_name, device, price_file, n_jobs):
     dfl = aggregate_dfl_profit(config)
 
     miqp_df = rescore_miqp_file(MIQP_PW_RESULTS, params, cell)
+    n_dfl = int(dfl["dfl_n"])
+    n_miqp = int(len(miqp_df))
+    print(f"[{cell_name}] DFL validated dates: {n_dfl} | MIQP rescored dates: {n_miqp}")
+    if n_dfl != n_miqp:
+        import warnings
+        warnings.warn(
+            f"[{cell_name}] DFL produced {n_dfl} rows but MIQP has {n_miqp}; "
+            f"means are over different date sets and gap_pct may be biased. "
+            f"Check for skipped dates (missing models / solver failures).")
     row = dict(cell=cell_name, **cell, **dfl,
                miqp_profit_mean=miqp_df["ex_post_profit"].mean(),
                miqp_profit_std=miqp_df["ex_post_profit"].std(),
                miqp_si=miqp_df["SI_penalty"].mean(),
                miqp_vol=miqp_df["volume_penalty"].mean())
-    row["gap_pct"] = 100.0 * (row["dfl_profit_mean"] - row["miqp_profit_mean"]) \
-        / row["miqp_profit_mean"]
+    miqp_mean = row["miqp_profit_mean"]
+    row["gap_pct"] = (100.0 * (row["dfl_profit_mean"] - miqp_mean) / miqp_mean
+                      if miqp_mean not in (0, 0.0) and miqp_mean == miqp_mean  # not NaN
+                      else float("nan"))
     return row
 
 
@@ -177,6 +188,8 @@ def main():
     ap.add_argument("--n-jobs", type=int, default=8)
     args = ap.parse_args()
 
+    # NOTE: seeds set here do not propagate into joblib worker processes (same as the
+    # existing pretraining scripts); the sweep targets penalty sensitivity, not bit-exact repro.
     np.random.seed(42); torch.manual_seed(42)
     device = setup_device()
 
