@@ -24,6 +24,9 @@ class HydroParameters:
         δ_h=1,
         δ_q=0.5,
         operational_cost=0.4,
+        si_shortage_mult=-2.0,
+        si_surplus_mult=-0.5,
+        vol_water_value_mult=1.0,
         rho=1000,
         g=9.81,
         mu=0.9,
@@ -84,6 +87,9 @@ class HydroParameters:
         self.time_horizon = time_horizon
         self.sampling_rate = sampling_rate
         self.operational_cost = operational_cost
+        self.si_shortage_mult = si_shortage_mult
+        self.si_surplus_mult = si_surplus_mult
+        self.vol_water_value_mult = vol_water_value_mult
         self.device = device
 
         self.δ_p = torch.tensor(δ_p, dtype=torch.float32, device=device)
