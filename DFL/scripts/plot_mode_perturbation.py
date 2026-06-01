@@ -10,8 +10,7 @@ Each panel shows:
   * infeasibility rate           (shaded, right axis: % of 19 days infeasible)
 
 Profit is averaged over feasible days only; the shaded infeasibility band makes
-the survivor bias explicit. The natural mode-disagreement rate from the audit is
-drawn as a vertical marker to anchor the realistic perturbation regime.
+the survivor bias explicit.
 
 Also prints a LaTeX-ready summary table including the DFL-over-raw improvement.
 """
@@ -53,7 +52,6 @@ PANELS = [
     ("pump2turbine",  r"Pump$\rightarrow$turbine",   "#d62728"),
 ]
 
-NATURAL_RATE = 2.74   # idle<->active disagreement rate from the audit
 N_DAYS = 19
 
 
@@ -93,7 +91,6 @@ def main():
         ax.plot(g.index, g['raw'], marker='x', color='0.45', ls='--',
                 label='Raw warm-start')
         ax.axhline(baseline, color='gray', ls=':', lw=0.7)
-        ax.axvline(NATURAL_RATE, color='black', ls='--', lw=0.7)
         ax.set_title(title, color=color)
         ax.set_ylim(-6500, 4500)
         ax.yaxis.set_major_locator(MultipleLocator(2000))
@@ -127,10 +124,9 @@ def main():
         Line2D([0], [0], color='0.2', marker='o', ls='-', label='DFL-refined'),
         Line2D([0], [0], color='0.45', marker='x', ls='--', label='Raw warm-start'),
         Line2D([0], [0], color='gray', ls=':', label='Correct warm-start'),
-        Line2D([0], [0], color='black', ls='--', lw=0.7, label='Realistic rate'),
         Patch(facecolor='0.5', alpha=0.2, label='Infeasible (%)'),
     ]
-    fig.legend(handles=handles, loc='upper center', ncol=5,
+    fig.legend(handles=handles, loc='upper center', ncol=4,
                bbox_to_anchor=(0.5, 1.10), fontsize=6.5)
     fig.tight_layout(h_pad=0.4, w_pad=0.6)
     fig.savefig(FIG_PATH)
