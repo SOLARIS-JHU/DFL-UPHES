@@ -499,9 +499,9 @@ class SimulationLayer:
         # Calculate revenue
         revenue = torch.sum(DA_price * e_sim)
 
-        # Determine the System Imbalance (SI) price
-        surplus_penalty_multiplier = -0.5
-        shortage_penalty_multiplier = -2.0
+        # Determine the System Imbalance (SI) price (multipliers from params)
+        surplus_penalty_multiplier = self.params.si_surplus_mult
+        shortage_penalty_multiplier = self.params.si_shortage_mult
 
         SI_price = torch.where(
             e_sim < p_opt,  # Shortage in simulation
@@ -517,7 +517,7 @@ class SimulationLayer:
         # Volume penalty - if final volume exceeds target
         volume_deficit = max(0, v_low_sim[-1] - self.params.target_vol_low)
         energy_loss = self.params.rho * volume_deficit * self.params.g * self.params.target_head * self.params.mu / 3.6e9  # Convert J to MWh
-        volume_penalty = energy_loss * torch.median(DA_price)
+        volume_penalty = energy_loss * self.params.vol_water_value_mult * torch.median(DA_price)
 
         # Operating cost
         operating_cost = self.params.operational_cost * torch.sum(p_sim**2)
