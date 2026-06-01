@@ -94,6 +94,20 @@ def test_rescore_schedule_matches_calc_profit_revenue_and_opcost():
     assert abs(out["ex_post_profit"] - (-32.0)) < 1e-6
 
 
+def test_rescore_miqp_file_reproduces_paper_baseline():
+    import torch
+    from DFL.scripts.run_penalty_sensitivity import build_context, PENALTY_CELLS, MIQP_PW_RESULTS
+    from DFL.scripts.rescore_miqp_penalties import rescore_miqp_file
+    device = torch.device("cpu")
+    config, params = build_context(PENALTY_CELLS["baseline"], device)
+    df = rescore_miqp_file(MIQP_PW_RESULTS, params, PENALTY_CELLS["baseline"])
+    # Paper MIQP-PW benchmark over the same 19 dates: ex-post ~3793, SI ~-9.6, Vol ~148.6
+    assert 3750 < df["ex_post_profit"].mean() < 3840, df["ex_post_profit"].mean()
+    assert -25 < df["SI_penalty"].mean() < 5, df["SI_penalty"].mean()
+    assert 100 < df["volume_penalty"].mean() < 200, df["volume_penalty"].mean()
+    assert len(df) == 19
+
+
 def test_penalty_cells_well_formed():
     from DFL.scripts.run_penalty_sensitivity import PENALTY_CELLS
     assert set(PENALTY_CELLS) == {"baseline", "si_symmetric", "si_mild", "vol_low", "vol_high"}
