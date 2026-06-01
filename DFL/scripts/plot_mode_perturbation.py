@@ -2,12 +2,18 @@
 """
 Plot mode-perturbation robustness results (Reviewer 3, Round 2, Issue 1).
 
-Reads the per-flip-type CSVs produced by run_mode_perturbation.py and produces:
-  * paper/figs/mode_perturbation_robustness.pdf  (profit vs rho, all flip types)
-  * a printed LaTeX-ready summary table.
+Reads the six per-transition CSVs produced by run_mode_perturbation.py and
+produces a 2x3 small-multiples figure (one mini-panel per directed mode error).
+Each panel shows:
+  * DFL-refined ex-post profit   (solid + markers, left axis)
+  * raw perturbed warm-start     (dashed, no DFL, left axis)
+  * infeasibility rate           (shaded, right axis: % of 19 days infeasible)
 
-The natural mode-disagreement rate (idle<->active) from the audit is drawn as a
-vertical marker to anchor the realistic perturbation regime.
+Profit is averaged over feasible days only; the shaded infeasibility band makes
+the survivor bias explicit. The natural mode-disagreement rate from the audit is
+drawn as a vertical marker to anchor the realistic perturbation regime.
+
+Also prints a LaTeX-ready summary table including the DFL-over-raw improvement.
 """
 
 import os
@@ -25,26 +31,29 @@ if repo_root not in sys.path:
 plt.rcParams.update({
     'font.family': 'serif',
     'font.serif': ['Times New Roman', 'Times', 'DejaVu Serif'],
-    'font.size': 9, 'axes.labelsize': 9, 'axes.titlesize': 10,
-    'xtick.labelsize': 8, 'ytick.labelsize': 8, 'legend.fontsize': 7,
-    'figure.figsize': (3.5, 2.8), 'axes.linewidth': 0.8, 'grid.linewidth': 0.4,
-    'lines.linewidth': 1.2, 'lines.markersize': 4,
-    'savefig.dpi': 600, 'savefig.bbox': 'tight', 'savefig.pad_inches': 0.01,
+    'font.size': 9, 'axes.labelsize': 8, 'axes.titlesize': 8,
+    'xtick.labelsize': 7, 'ytick.labelsize': 7, 'legend.fontsize': 7,
+    'axes.linewidth': 0.8, 'grid.linewidth': 0.4,
+    'lines.linewidth': 1.1, 'lines.markersize': 3.5,
+    'savefig.dpi': 600, 'savefig.bbox': 'tight', 'savefig.pad_inches': 0.02,
     'legend.framealpha': 0.95, 'legend.edgecolor': 'black',
 })
 
 OUT_DIR = "./DFL/outputs"
 FIG_PATH = "./paper/figs/mode_perturbation_robustness.pdf"
 
-# (csv suffix, label, marker, color)
-SERIES = [
-    ("idle2active", r"Idle$\rightarrow$active (commit)", "o", "#1f77b4"),
-    ("active2idle", r"Active$\rightarrow$idle (de-commit)", "s", "#2ca02c"),
-    ("sign",        r"Turbine$\leftrightarrow$pump (sign)", "^", "#d62728"),
+# (suffix, title, category color) grouped: blue=commit, green=de-commit, red=sign
+PANELS = [
+    ("idle2turbine",  r"Idle$\rightarrow$turbine",  "#1f77b4"),
+    ("idle2pump",     r"Idle$\rightarrow$pump",      "#1f77b4"),
+    ("turbine2idle",  r"Turbine$\rightarrow$idle",   "#2ca02c"),
+    ("pump2idle",     r"Pump$\rightarrow$idle",      "#2ca02c"),
+    ("turbine2pump",  r"Turbine$\rightarrow$pump",   "#d62728"),
+    ("pump2turbine",  r"Pump$\rightarrow$turbine",   "#d62728"),
 ]
 
-# Natural disagreement rate (idle<->active) from run_mode_disagreement_audit.py
-NATURAL_RATE = 2.74
+NATURAL_RATE = 2.74   # idle<->active disagreement rate from the audit
+N_DAYS = 19
 
 
 def load(suffix):
@@ -52,61 +61,89 @@ def load(suffix):
     if not os.path.exists(path):
         return None
     df = pd.read_csv(path)
-    # average over successful solves only; failures tracked separately
-    g = df.groupby('rho')['ex_post'].apply(lambda s: np.nanmean(s))
-    fails = df.groupby('rho')['failed'].sum()
-    return g, fails
+    g = df.groupby('rho').agg(
+        dfl=('ex_post', lambda s: np.nanmean(s)),
+        raw=('raw_ex_post', lambda s: np.nanmean(s)),
+        n_fail=('failed', lambda s: int(s.sum())),
+        n=('failed', 'size'),
+    )
+    g['infeas_pct'] = 100.0 * g['n_fail'] / g['n']
+    return g
 
 
 def main():
-    fig, ax = plt.subplots(figsize=(3.5, 2.4))
+    fig, axes = plt.subplots(2, 3, figsize=(7.16, 3.6), sharex=True)
+    axes = axes.ravel()
 
-    baseline = None
     summary = {}
-    fails_by = {}
-    for suffix, label, marker, color in SERIES:
-        loaded = load(suffix)
-        if loaded is None:
+    baseline = None
+    for ax, (suffix, title, color) in zip(axes, PANELS):
+        g = load(suffix)
+        if g is None:
             print(f"[warn] missing {suffix}")
             continue
-        g, fails = loaded
+        summary[suffix] = g
         if baseline is None:
-            baseline = g.loc[0]
-        ax.plot(g.index, g.values, marker=marker, color=color, label=label)
-        summary[label] = g
-        fails_by[label] = fails
+            baseline = g['dfl'].loc[0]
 
-    if baseline is not None:
-        ax.axhline(baseline, color='gray', ls=':', lw=0.8,
-                   label='Correct warm-start')
+        # left axis: profit
+        ax.plot(g.index, g['dfl'], marker='o', color=color, ls='-',
+                label='DFL-refined')
+        ax.plot(g.index, g['raw'], marker='x', color='0.45', ls='--',
+                label='Raw warm-start')
+        ax.axhline(baseline, color='gray', ls=':', lw=0.7)
+        ax.axvline(NATURAL_RATE, color='black', ls='--', lw=0.7)
+        ax.set_title(title, color=color)
+        ax.set_ylim(-6500, 4500)
+        ax.axhline(0, color='0.7', lw=0.5)
+        ax.grid(True, alpha=0.3)
 
-    ax.axvline(NATURAL_RATE, color='black', ls='--', lw=0.8)
-    ymin, ymax = ax.get_ylim()
-    ax.text(NATURAL_RATE + 0.08, ymax, 'realistic\nrate', fontsize=6,
-            va='top', ha='left')
+        # right axis: infeasibility rate (shaded)
+        ax2 = ax.twinx()
+        ax2.fill_between(g.index, 0, g['infeas_pct'], color=color, alpha=0.12)
+        ax2.set_ylim(0, 100)
+        ax2.set_yticks([0, 50, 100])
+        ax2.tick_params(labelsize=6)
+        # only show right-axis label on rightmost column
+        if suffix in ('idle2pump', 'pump2idle', 'pump2turbine'):
+            ax2.set_ylabel('infeasible (%)', fontsize=6)
+        else:
+            ax2.set_yticklabels([])
 
-    ax.set_xlabel("Corrupted warm-start modes (hours)")
-    ax.set_ylabel("Mean ex-post profit (EUR)")
-    ax.grid(True, alpha=0.3)
-    ax.legend(loc='lower left', bbox_to_anchor=(0.0, 0.0))
+    # shared labels
+    for ax in axes[3:]:
+        ax.set_xlabel("Corrupted modes (hours)")
+    for ax in (axes[0], axes[3]):
+        ax.set_ylabel("Ex-post profit (EUR)")
+
+    # single shared legend (profit lines + infeasibility patch)
+    from matplotlib.lines import Line2D
+    from matplotlib.patches import Patch
+    handles = [
+        Line2D([0], [0], color='0.2', marker='o', ls='-', label='DFL-refined'),
+        Line2D([0], [0], color='0.45', marker='x', ls='--', label='Raw warm-start'),
+        Line2D([0], [0], color='gray', ls=':', label='Correct warm-start'),
+        Line2D([0], [0], color='black', ls='--', lw=0.7, label='Realistic rate'),
+        Patch(facecolor='0.5', alpha=0.2, label='Infeasible (%)'),
+    ]
+    fig.legend(handles=handles, loc='upper center', ncol=5,
+               bbox_to_anchor=(0.5, 1.06), fontsize=7)
+    fig.tight_layout()
     fig.savefig(FIG_PATH)
     print(f"Wrote figure to {FIG_PATH}")
 
-    # Summary table (% change vs baseline)
-    print("\n=== Mean ex-post profit (EUR) and % change vs correct warm-start ===")
-    rhos = sorted(set().union(*[set(g.index) for g in summary.values()]))
-    header = "rho  " + "  ".join(f"{lbl[:18]:>20}" for lbl in summary)
-    print(header)
-    for r in rhos:
-        cells = []
-        for lbl, g in summary.items():
-            if r in g.index:
-                pct = 100 * (g.loc[r] - baseline) / baseline
-                nf = int(fails_by[lbl].loc[r]) if r in fails_by[lbl].index else 0
-                cells.append(f"{g.loc[r]:7.1f} ({pct:+.1f}%, f={nf})")
-            else:
-                cells.append(" " * 24)
-        print(f"{r:>3}  " + "  ".join(f"{c:>24}" for c in cells))
+    # ---- summary table ----
+    print("\n=== DFL-refined vs raw warm-start (mean over feasible days) ===")
+    print("transition       rho  DFL_profit  raw_profit  DFL-raw   infeas%")
+    for suffix, _, _ in PANELS:
+        g = summary.get(suffix)
+        if g is None:
+            continue
+        for rho in g.index:
+            row = g.loc[rho]
+            print(f"{suffix:14s}  {rho:>3}  {row['dfl']:10.0f}  "
+                  f"{row['raw']:10.0f}  {row['dfl']-row['raw']:7.0f}  "
+                  f"{row['infeas_pct']:6.0f}")
 
 
 if __name__ == "__main__":

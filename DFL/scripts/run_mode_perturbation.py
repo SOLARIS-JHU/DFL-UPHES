@@ -12,22 +12,22 @@ Here we deliberately corrupt the warm-start mode sequence and measure the
 resulting ex-post profit, using the clean MIQP-PW reference schedule of each of
 the 19 representative days as the (correct) starting point.
 
-Flips are chosen by "most uncertain commitment", NOT uniformly at random:
+We test all six directed mode-commitment errors separately. Each corrupts the
+hours where the erroneous commitment is *least obvious* and therefore most
+probable at the day-ahead stage (marginal price signal or marginal output),
+rather than economically self-evident corruptions:
 
-  * idle2active   : activate the rho most temptingly-priced idle hours into the
-                    economically-consistent mode (turbine at high price, pump at
-                    low price), with power at that mode's head-dependent minimum.
-  * active2idle   : de-commit the rho smallest-|p| active hours (closest to the
-                    p_min floor = most marginal commitments) to idle.
-  * sign          : reverse the sign (turbine<->pump) of the rho lowest-|p|
-                    active hours (least-bad sign reversals).
+  spurious commitment   : idle->turbine (highest-price idle hours),
+                          idle->pump    (lowest-price idle hours)
+  spurious de-commitment: turbine->idle, pump->idle (lowest-|p| of that mode)
+  sign reversal         : turbine->pump, pump->turbine (lowest-|p| of that mode)
 
 Everything runs SOLVER-FREE (no Gurobi): it reuses each date's pretrained LSTM
 penalty predictor and the differentiable QP / simulation layers.
 
 Usage:
-    python DFL/scripts/run_mode_perturbation.py --flip-type idle2active
-    python DFL/scripts/run_mode_perturbation.py --flip-type idle2active --rhos 1,2,3,4,5 --seeds 3
+    python DFL/scripts/run_mode_perturbation.py --flip-type turbine2pump
+    python DFL/scripts/run_mode_perturbation.py --flip-type idle2turbine --rhos 1,2,3,4,5,6 --seeds 1
 """
 
 import sys
@@ -123,9 +123,27 @@ def load_reference_days(device):
     return days
 
 
+# The six directed mode-commitment errors. Each selects the hours where the
+# erroneous commitment is *least obvious* and therefore most probable at the
+# day-ahead stage (marginal price signal / marginal output), rather than the
+# economically self-evident corruptions.
+FLIP_TYPES = [
+    'idle2turbine', 'idle2pump',      # spurious commitment
+    'turbine2idle', 'pump2idle',      # spurious de-commitment
+    'turbine2pump', 'pump2turbine',   # sign reversal
+]
+
+
 def perturb_modes(power, head, price, params, flip_type, rho, rng):
     """
-    Return a perturbed copy of `power` with `rho` hours' modes flipped.
+    Return a perturbed copy of `power` with `rho` hours' modes flipped along one
+    directed transition `flip_type` in FLIP_TYPES.
+
+    Selection picks the *most plausible* error of that kind:
+      * idle->turbine : highest-price idle hours (most tempting to over-generate)
+      * idle->pump    : lowest-price idle hours  (most tempting to over-charge)
+      * turbine->{idle,pump} : lowest-|p| turbine hours (marginal generation)
+      * pump->{idle,turbine} : lowest-|p| pump hours    (marginal charging)
 
     power, head, price: [24] tensors (clean MIQP-PW reference).
     Returns (perturbed_power, n_flipped).
@@ -136,41 +154,73 @@ def perturb_modes(power, head, price, params, flip_type, rho, rng):
     TH = p.shape[0]
     tol = 0.5  # active threshold used throughout the codebase
 
-    active_idx = [t for t in range(TH) if abs(p[t].item()) > tol]
     idle_idx = [t for t in range(TH) if abs(p[t].item()) <= tol]
+    turbine_idx = [t for t in range(TH) if p[t].item() > tol]
+    pump_idx = [t for t in range(TH) if p[t].item() < -tol]
 
-    if flip_type == 'idle2active':
-        # Most "temptingly priced" idle hours: extreme prices (far from median)
-        # are where committing is most tempting / ambiguous.
-        med = torch.median(pr).item()
-        cand = sorted(idle_idx, key=lambda t: -abs(pr[t].item() - med))
-        chosen = cand[:rho]
+    if flip_type == 'idle2turbine':
+        # most tempting to spuriously generate: highest-price idle hours
+        chosen = sorted(idle_idx, key=lambda t: -pr[t].item())[:rho]
         for t in chosen:
-            if pr[t].item() >= med:
-                # high price -> turbine, power at head-dependent minimum
-                p[t] = params.pos_min(h[t])
-            else:
-                # low price -> pump (negative power), at minimum magnitude
-                p[t] = params.neg_min(h[t])
+            p[t] = params.pos_min(h[t])
         return p, len(chosen)
 
-    if flip_type == 'active2idle':
-        # Smallest-|p| active hours = most marginal commitments.
-        cand = sorted(active_idx, key=lambda t: abs(p[t].item()))
-        chosen = cand[:rho]
+    if flip_type == 'idle2pump':
+        # most tempting to spuriously charge: lowest-price idle hours
+        chosen = sorted(idle_idx, key=lambda t: pr[t].item())[:rho]
+        for t in chosen:
+            p[t] = params.neg_min(h[t])
+        return p, len(chosen)
+
+    if flip_type == 'turbine2idle':
+        chosen = sorted(turbine_idx, key=lambda t: abs(p[t].item()))[:rho]
         for t in chosen:
             p[t] = torch.zeros_like(p[t])
         return p, len(chosen)
 
-    if flip_type == 'sign':
-        # Lowest-|p| active hours, reverse sign (turbine<->pump).
-        cand = sorted(active_idx, key=lambda t: abs(p[t].item()))
-        chosen = cand[:rho]
+    if flip_type == 'pump2idle':
+        chosen = sorted(pump_idx, key=lambda t: abs(p[t].item()))[:rho]
+        for t in chosen:
+            p[t] = torch.zeros_like(p[t])
+        return p, len(chosen)
+
+    if flip_type == 'turbine2pump':
+        chosen = sorted(turbine_idx, key=lambda t: abs(p[t].item()))[:rho]
+        for t in chosen:
+            p[t] = -p[t]
+        return p, len(chosen)
+
+    if flip_type == 'pump2turbine':
+        chosen = sorted(pump_idx, key=lambda t: abs(p[t].item()))[:rho]
         for t in chosen:
             p[t] = -p[t]
         return p, len(chosen)
 
     raise ValueError(f"unknown flip_type {flip_type}")
+
+
+def simulate_raw(power_init, head_init_traj, price, params, device):
+    """
+    Ex-post profit of the (possibly corrupted) warm-start executed AS-IS, with no
+    DFL refinement: feed the schedule straight through the physical simulator.
+
+    The simulator clamps power to the head-dependent envelope, recomputes flow
+    from the true polynomial UPC, integrates the reservoir mass balance, and the
+    profit accounts for system-imbalance and terminal-volume penalties. The
+    imbalance reference is the perturbed schedule itself (no optimization step).
+    """
+    power_init = power_init.clone().detach()
+    head_init = head_init_traj.clone().detach()
+    flow_init = params.predict_q_poly(power_init.unsqueeze(0), head_init.unsqueeze(0)).squeeze(0)
+
+    sim = SimulationLayer(params)
+    p_sim, q_sim, h_sim, v_low_sim = sim.simulate_operation(
+        power_init.to(device), flow_init.to(device), head_init.to(device)
+    )
+    ex_post, SI_pen, vol_pen, op_cost = sim.calc_profit(
+        p_sim, power_init.to(device), v_low_sim, price.to(device)
+    )
+    return dict(raw_ex_post=ex_post.item())
 
 
 def run_dfl(power_init, head_init_traj, price, params, config, model_path, device):
@@ -234,8 +284,7 @@ def run_dfl(power_init, head_init_traj, price, params, config, model_path, devic
 
 def main():
     ap = argparse.ArgumentParser(description="Mode-perturbation robustness experiment")
-    ap.add_argument('--flip-type', required=True,
-                    choices=['idle2active', 'active2idle', 'sign'])
+    ap.add_argument('--flip-type', required=True, choices=FLIP_TYPES)
     ap.add_argument('--rhos', default='1,2,3,4,5',
                     help='comma-separated hour counts to flip')
     ap.add_argument('--seeds', type=int, default=3, help='random seeds per rho')
@@ -263,6 +312,8 @@ def main():
         if not model_path.exists():
             print(f"  [skip] no model for {date_str}")
             continue
+        with suppress_stdout_fd():
+            raw = simulate_raw(d['power'], d['head'], d['price'], params, device)
         try:
             with suppress_stdout_fd():
                 r = run_dfl(d['power'], d['head'], d['price'], params, config, model_path, device)
@@ -273,7 +324,7 @@ def main():
         if r['failed'] == 0:
             base_profits.append(r['ex_post'])
         rows.append(dict(flip_type=args.flip_type, rho=0, seed=-1, date=date_str,
-                         n_flipped=0, **r))
+                         n_flipped=0, **r, **raw))
     print(f"  baseline mean ex-post profit = {np.nanmean(base_profits):.1f} EUR "
           f"(n={len(base_profits)})")
 
@@ -291,6 +342,8 @@ def main():
                     continue
                 p_pert, n_flip = perturb_modes(d['power'], d['head'], d['price'],
                                                params, args.flip_type, rho, rng)
+                with suppress_stdout_fd():
+                    raw = simulate_raw(p_pert, d['head'], d['price'], params, device)
                 try:
                     with suppress_stdout_fd():
                         r = run_dfl(p_pert, d['head'], d['price'], params, config, model_path, device)
@@ -300,7 +353,7 @@ def main():
                     r = dict(ex_post=np.nan, SI=np.nan, vol=np.nan, failed=1)
                     n_fail += 1
                 rows.append(dict(flip_type=args.flip_type, rho=rho, seed=seed,
-                                 date=date_str, n_flipped=n_flip, **r))
+                                 date=date_str, n_flipped=n_flip, **r, **raw))
             print(f"  rho={rho} seed={seed}: mean ex-post profit = "
                   f"{np.nanmean(profits) if profits else float('nan'):.1f} EUR "
                   f"(n={len(profits)}, solver-fails={n_fail})")
