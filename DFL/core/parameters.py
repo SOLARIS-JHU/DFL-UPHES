@@ -62,6 +62,9 @@ class HydroParameters:
             sampling_rate: Number of samples for Taylor regression
             δ_p, δ_h, δ_q: Penalty weight parameters
             operational_cost: Cost per unit of operation
+            si_shortage_mult: SI imbalance multiplier when actual output < scheduled (negative = penalty, default -2.0)
+            si_surplus_mult: SI imbalance multiplier when actual output > scheduled (negative = penalty, default -0.5)
+            vol_water_value_mult: Multiplier on terminal-volume water-value penalty (default 1.0)
             rho: Water density (kg/m³)
             g: Gravitational acceleration (m/s²)
             mu: Efficiency coefficient
