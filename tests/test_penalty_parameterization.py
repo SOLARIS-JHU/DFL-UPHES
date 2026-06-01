@@ -55,3 +55,18 @@ def test_calc_profit_default_si_matches_legacy_constants():
     _, si, _, _ = sim.calc_profit(p_sim, p_opt, v_low, DA)
     # surplus hour: +1 * (-0.5*10) = -5 ; shortage hour: -1 * (-2.0*10) = +20
     assert abs(si.item() - 15.0) < 1e-4
+
+
+def test_calc_profit_volume_penalty_scales_with_multiplier():
+    # Same trajectory with a terminal-volume DEFICIT; only the multiplier differs.
+    DA = torch.tensor([10.0, 10.0])
+    p_opt = torch.tensor([1.0, 1.0])
+    p_sim = torch.tensor([1.0, 1.0])                  # no SI imbalance, isolate volume
+    v_low = torch.tensor([300000.0, 360000.0])        # final volume 60000 above target
+    _, _, vol_base, _ = _make_sim(vol_water_value_mult=1.0).calc_profit(
+        p_sim, p_opt, v_low, DA)
+    _, _, vol_scaled, _ = _make_sim(vol_water_value_mult=2.0).calc_profit(
+        p_sim, p_opt, v_low, DA)
+    # Non-zero penalty under a real deficit, and exactly doubled by a 2x multiplier.
+    assert vol_base.item() > 0
+    assert abs(vol_scaled.item() - 2.0 * vol_base.item()) < 1e-4
