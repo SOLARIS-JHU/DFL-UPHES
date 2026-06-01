@@ -72,7 +72,7 @@ def load(suffix):
 
 
 def main():
-    fig, axes = plt.subplots(2, 3, figsize=(7.16, 3.6), sharex=True)
+    fig, axes = plt.subplots(2, 3, figsize=(7.16, 2.7), sharex=True)
     axes = axes.ravel()
 
     summary = {}
@@ -127,8 +127,8 @@ def main():
         Patch(facecolor='0.5', alpha=0.2, label='Infeasible (%)'),
     ]
     fig.legend(handles=handles, loc='upper center', ncol=5,
-               bbox_to_anchor=(0.5, 1.06), fontsize=7)
-    fig.tight_layout()
+               bbox_to_anchor=(0.5, 1.10), fontsize=6.5)
+    fig.tight_layout(h_pad=0.4, w_pad=0.6)
     fig.savefig(FIG_PATH)
     print(f"Wrote figure to {FIG_PATH}")
 
