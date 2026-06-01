@@ -242,11 +242,20 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 - Create: `DFL/scripts/rescore_miqp_penalties.py`
 - Test: `tests/test_penalty_parameterization.py`
 
-The MIQP schedule is feasible-by-construction, so ex-post `p_sim == p_opt == power`
-(no imbalance) — the SI multipliers therefore have NO effect on the MIQP row, and only
-the terminal-volume term moves it. We still compute SI for completeness and to make the
-"same penalties on both sides" claim literally true. Re-scoring reuses the exact profit
-algebra of `calc_profit` (revenue − op_cost − SI − volume) on the MIQP `power` column.
+> **CORRECTION (discovered at the Task 5 reconciliation gate).** The original
+> assumption — that the MIQP schedule is feasible so `p_sim == p_opt` and the
+> SI/Vol penalties vanish — is WRONG. The paper evaluates MIQP-PW by feeding the
+> planned `p,q,h` through `SimulationLayer.simulate_operation` (which recomputes a
+> physically-feasible trajectory `p_sim` that *deviates* from the plan, creating
+> real imbalance and a real terminal-volume deficit) then `calc_profit`
+> (`MIQP/MIQP_piecewise/MIQP_piecewise.py:372-377`). That yields nonzero SI
+> (≈ −9.6 €) and Vol (≈ 148.6 €), ex-post ≈ 3793 €. The simplified numpy algebra
+> zeroed exactly the penalties the reviewer asks about. The corrected re-scorer
+> SIMULATES each MIQP schedule and calls `calc_profit` under the cell's `params`,
+> mirroring the DFL side. The numpy `rescore_schedule` is kept only as a
+> unit-tested helper for the feasible-trajectory identity; the sweep's production
+> path is simulate→calc_profit. Baseline reconciliation target: MIQP-PW ex-post
+> ≈ 3793 €, SI ≈ −9.6, Vol ≈ 148.6.
 
 - [ ] **Step 1: Write the failing test**
 
