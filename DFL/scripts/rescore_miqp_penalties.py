@@ -32,7 +32,7 @@ def rescore_schedule(power, DA_price, si_shortage_mult, si_surplus_mult,
     operating_cost = float(operational_cost * np.sum(p ** 2))
 
     si_price = np.where(p < p_opt, si_shortage_mult * da, si_surplus_mult * da)
-    imbalance = p - p_opt  # == 0 for MIQP
+    imbalance = p - p_opt  # imbalance == 0 for MIQP; si_price computed for structural parity, no effect
     SI_penalty = float(np.sum(imbalance * si_price))
 
     volume_deficit = max(0.0, float(final_volume) - float(target_vol_low))
@@ -62,14 +62,14 @@ def rescore_miqp_file(results_csv, params, cell, test_dates=None):
     """
     df = pd.read_csv(results_csv)
     rows = []
-    for date, g_df in df.groupby("date"):
+    for date, day_df in df.groupby("date"):
         if test_dates is not None and str(date) not in set(map(str, test_dates)):
             continue
-        g_df = g_df.sort_values("hour")
-        final_volume = float(g_df["volume"].iloc[-1])
+        day_df = day_df.sort_values("hour")
+        final_volume = float(day_df["volume"].iloc[-1])
         out = rescore_schedule(
-            power=g_df["power"].to_numpy(),
-            DA_price=g_df["price"].to_numpy(),
+            power=day_df["power"].to_numpy(),
+            DA_price=day_df["price"].to_numpy(),
             si_shortage_mult=cell["si_shortage_mult"],
             si_surplus_mult=cell["si_surplus_mult"],
             vol_water_value_mult=cell["vol_water_value_mult"],
@@ -83,6 +83,10 @@ def rescore_miqp_file(results_csv, params, cell, test_dates=None):
         )
         out["date"] = str(date)
         rows.append(out)
+    if not rows:
+        raise ValueError(
+            f"rescore_miqp_file produced no rows from {results_csv} "
+            f"(test_dates={test_dates!r}); check date formats match the CSV.")
     return pd.DataFrame(rows)
 
 
