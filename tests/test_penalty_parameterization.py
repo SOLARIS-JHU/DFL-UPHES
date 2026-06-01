@@ -92,3 +92,13 @@ def test_rescore_schedule_matches_calc_profit_revenue_and_opcost():
     assert abs(out["SI_penalty"]) < 1e-6
     assert abs(out["volume_penalty"]) < 1e-6
     assert abs(out["ex_post_profit"] - (-32.0)) < 1e-6
+
+
+def test_penalty_cells_well_formed():
+    from DFL.scripts.run_penalty_sensitivity import PENALTY_CELLS
+    assert set(PENALTY_CELLS) == {"baseline", "si_symmetric", "si_mild", "vol_low", "vol_high"}
+    for name, c in PENALTY_CELLS.items():
+        assert set(c) == {"si_shortage_mult", "si_surplus_mult", "vol_water_value_mult"}
+    # baseline must equal the framework defaults
+    assert PENALTY_CELLS["baseline"] == dict(
+        si_shortage_mult=-2.0, si_surplus_mult=-0.5, vol_water_value_mult=1.0)
