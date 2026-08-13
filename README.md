@@ -220,6 +220,7 @@ python results/visualization.py                   # publication figures
 | MIQP baseline performance (Table III) | `MIQP/MIQP_linear/MIQP_global_linear.py`, `MIQP/MIQP_piecewise/MIQP_piecewise.py` |
 | DFL vs MIQP profit and timing (Table III, Fig. 4) | Training and validation scripts above, then `results/` scripts |
 | Noise robustness (Fig. 5) | `DFL/scripts/generate_noisy_data.py`, `DFL/scripts/evaluate_noisy_miqp.py`, `results/visualization.py` |
+| Penalty sensitivity (Table IV) | `DFL/scripts/run_penalty_sensitivity.py`, `DFL/scripts/rescore_miqp_penalties.py`, `DFL/scripts/make_penalty_sensitivity_table.py` |
 | Component ablations (Table V, Fig. 6) | `DFL/scripts/run_pretraining_pw_norec.py`, `DFL/scripts/run_ablation_study.py` |
 | IPOPT nonlinear programming baselines (Tables III, VI) | `DFL/scripts/run_ipopt_comparison.py` |
 | Warm-start mode-error robustness (Fig. 7) | `DFL/scripts/run_mode_disagreement_audit.py`, `DFL/scripts/run_mode_perturbation.py`, `DFL/scripts/plot_mode_perturbation.py` |
