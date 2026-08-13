@@ -203,3 +203,6 @@ prompts/
 
 # Paper workspace
 /paper/
+
+# Internal planning docs
+/docs/superpowers/
