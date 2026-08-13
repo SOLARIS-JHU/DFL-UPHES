@@ -20,7 +20,7 @@ Companion code for the paper ["Accelerating Underground Pumped Hydro Energy Stor
 Underground Pumped Hydro Energy Storage (UPHES) repurposes abandoned mines as the lower reservoir of a pumped hydro plant, enabling grid-scale storage where surface topography rules out conventional pumped hydro.
 
 <p align="center">
-  <img src="figs/UPHES.svg" width="55%" alt="UPHES system schematic">
+  <img src="figs/UPHES.jpg" width="55%" alt="UPHES system schematic">
 </p>
 
 Operating as a price taker in the day-ahead energy market, the plant maximizes its profit over a 24-hour horizon:
@@ -39,10 +39,10 @@ Here $p_t$, $q_t$, $h_t$, and $v_t$ denote net power, water flow, hydraulic head
 
 ## The DFL Framework
 
-Conventional two-stage pipelines train a model to minimize prediction error and assume that accurate predictions translate into good decisions; in systems with non-convex physics and asymmetric costs, this assumption fails. Decision-Focused Learning (DFL) instead embeds the optimization into the training loop and learns to maximize the decision objective itself. Here, the entire scheduling pipeline is differentiable, so the neural network is trained end-to-end on the ex-post profit of its schedules under the true nonlinear dynamics, navigating the accuracy-computation trade-off that the MIQP approximations cannot.
+Decision-Focused Learning (DFL) trains models directly on the downstream decision objective. Our DFL framework refines any feasible schedule through recursive local linearization guided by learned penalty weights, and since every step is differentiable, the weight predictor is trained end-to-end on the ex-post profit of its schedules evaluated under the true nonlinear dynamics.
 
 <p align="center">
-  <img src="figs/DFL.svg" width="90%" alt="DFL computational graph">
+  <img src="figs/DFL.jpg" width="90%" alt="DFL computational graph">
 </p>
 
 The pipeline chains four differentiable components:
@@ -93,7 +93,7 @@ Evaluated on 19 representative Belgian day-ahead price profiles (2024, Elia):
 Ablations: removing the neural penalty predictor costs 2.8% profit, removing recursion costs 1.0%. DFL profit stays nearly constant as warm-start corruption grows from 10% to 80%, while MIQP baselines degrade by 12 to 23%:
 
 <p align="center">
-  <img src="results/figures/noise_robustness_ablation_study.png" width="80%" alt="Robustness to warm-start noise">
+  <img src="results/figures/noise_robustness_ablation_study.png" width="60%" alt="Robustness to warm-start noise">
 </p>
 
 ---
@@ -129,7 +129,7 @@ cat DFL/outputs/validation_results/comprehensive/master_validation_benchmarks.cs
 
 Trained models land in `DFL/outputs/trained_models/`, validation benchmarks in `DFL/outputs/validation_results/`.
 
-A hands-on walkthrough is available as a Jupyter notebook: [docs/dfl_uphes_mvp.ipynb](docs/dfl_uphes_mvp.ipynb).
+A hands-on walkthrough is available as a Jupyter notebook: [![Tutorial](https://img.shields.io/badge/Jupyter-Tutorial_Notebook-F37626.svg?logo=jupyter&logoColor=white)](docs/dfl_uphes_mvp.ipynb)
 
 ---
 
