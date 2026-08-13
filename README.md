@@ -281,8 +281,8 @@ If you use this code in your research, please cite our paper:
 }
 ```
 
-IEEE Transactions on Sustainable Energy (Early Access): [https://doi.org/10.1109/TSTE.2026.3722492](https://doi.org/10.1109/TSTE.2026.3722492)
-Accepted version (open access) on arXiv: [https://arxiv.org/abs/2512.20880](https://arxiv.org/abs/2512.20880)
+Published version: [![IEEE Xplore](https://img.shields.io/badge/IEEE_Xplore-10.1109%2FTSTE.2026.3722492-00629B.svg?logo=ieee&logoColor=white)](https://doi.org/10.1109/TSTE.2026.3722492)  
+Accepted version (open access): [![arXiv](https://img.shields.io/badge/arXiv-2512.20880-B31B1B.svg?logo=arxiv&logoColor=white)](https://arxiv.org/abs/2512.20880)
 
 ## License
 
