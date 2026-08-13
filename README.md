@@ -1,12 +1,13 @@
-# DFL4UPHES
+# DFL-UPHES
 
+[![DOI](https://img.shields.io/badge/DOI-10.1109%2FTSTE.2026.3722492-blue.svg)](https://doi.org/10.1109/TSTE.2026.3722492)
 [![arXiv](https://img.shields.io/badge/arXiv-2512.20880-b31b1b.svg)](https://arxiv.org/abs/2512.20880)
-[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 **Decision-Focused Learning for Underground Pumped Hydro Energy Storage Day-Ahead Scheduling**
 
-Transform intractable UPHES scheduling into fast, accurate optimization using end-to-end differentiable learning.
+Official implementation of the paper ["Accelerating Underground Pumped Hydro Energy Storage Scheduling with Decision-Focused Learning"](https://doi.org/10.1109/TSTE.2026.3722492), published in *IEEE Transactions on Sustainable Energy*. The framework transforms intractable UPHES scheduling into fast, accurate optimization using end-to-end differentiable learning.
 
 ---
 
@@ -36,20 +37,7 @@ Transform intractable UPHES scheduling into fast, accurate optimization using en
 
 ---
 
-## 🔗 Quick Links
-
-| Resource | Description |
-|----------|-------------|
-| 📄 [**Paper (arXiv)**](https://arxiv.org/abs/2512.20880) | Full technical details and methodology |
-| 📓 [**Interactive Tutorial**](docs/dfl_uphes_mvp.ipynb) | Jupyter notebook walkthrough |
-| 🚀 [**Quick Start**](#-quick-start) | Get running in 5 minutes |
-| 📚 [**Complete Workflow**](#-complete-workflow) | Full pipeline from preprocessing to results |
-| 🏗️ [**Architecture**](#%EF%B8%8F-repository-architecture) | System design and structure |
-| 📖 [**Citation**](#-citation) | BibTeX entry for papers |
-
----
-
-## 💡 What is DFL-for-UPHES?
+## What is DFL-UPHES?
 
 **The Problem**: Underground Pumped Hydro Energy Storage (UPHES) systems require day-ahead scheduling to maximize profit in electricity markets. However, the scheduling problem involves highly nonlinear pump-turbine characteristics and reservoir dynamics, making it an intractable **Mixed-Integer Nonlinear Program (MINLP)**.
 
@@ -59,21 +47,23 @@ Transform intractable UPHES scheduling into fast, accurate optimization using en
 
 ### Four DFL Variants
 
-1. **DFL-GL-RS** ⚡: Global linear approximation with LSTM (fastest, real-time implementation tool)
-2. **DFL-PW-RS** 🎯: Piecewise SOS2 approximation with LSTM (highest accuracy, refinement tool)
-3. **DFL-PW-no-Rec** 🔬: Piecewise with 1 iteration (ablation study on recursion impact)
-4. **DFL-PW-no-NN** 🧪: Fixed penalty weights (ablation study on neural network impact)
+1. **DFL-GL-RS**: Global linear approximation with LSTM (fastest, real-time implementation tool)
+2. **DFL-PW-RS**: Piecewise SOS2 approximation with LSTM (highest accuracy, refinement tool)
+3. **DFL-PW-no-Rec**: Piecewise with 1 iteration (ablation study on recursion impact)
+4. **DFL-PW-no-NN**: Fixed penalty weights (ablation study on neural network impact)
 
 ---
 
-## ⚡ Quick Start
+## Quick Start
 
 ### Installation
+
+Requires Python 3.11 or newer.
 
 ```bash
 # Clone the repository
 git clone https://github.com/SOLARIS-JHU/DFL-UPHES.git
-cd DFL-for-UPHES
+cd DFL-UPHES
 
 # Install dependencies
 pip install -r requirements.txt
@@ -110,7 +100,7 @@ cat DFL/outputs/validation_results/comprehensive/master_validation_benchmarks.cs
 
 ---
 
-## 📋 Complete Workflow
+## Complete Workflow
 
 ### Pipeline Workflow Diagram
 
@@ -234,7 +224,7 @@ python DFL/scripts/run_validation_pw_norec.py
 
 **Outputs**: Validation metrics in `DFL/outputs/validation_results/{data_source}/LSTM_3layer_7iter/scheduling_benchmarks.csv`
 
-#### Step 5C: Fixed-Weight Baseline (Optional)
+#### Step 6: Fixed-Weight Baseline (Optional)
 
 Run the fixed-weight baseline to validate neural network impact:
 
@@ -244,7 +234,7 @@ python DFL/scripts/run_ablation_study.py
 
 **Configuration**: Fixed weights (w_p=0.1, w_q=0.01, w_h=0.05) with 7 recursive iterations (no neural network).
 
-#### Step 6: Aggregate Validation Results
+#### Step 7: Aggregate Validation Results
 
 Combine results from all 4 variants into a master file:
 
@@ -260,7 +250,7 @@ python results/aggregate_validation_results.py
 - **DFL-PW-no-Rec**: PW no-recursion (1 iteration, LSTM)
 - **DFL-PW-no-NN**: PW no-neural-network (7 iterations, fixed weights)
 
-#### Step 7: Generate Tables and Visualizations
+#### Step 8: Generate Tables and Visualizations
 
 Generate publication-quality tables and plots:
 
@@ -284,66 +274,9 @@ python results/visualization.py
 - `noise_robustness_ablation_study.{pdf,png}` - Ablation study robustness analysis
 - `profit_vs_penalties_ablation.{pdf,png}` - Profit-penalty trade-off visualizations
 
-<!-- ### Full Workflow Script
-
-To run the entire pipeline automatically:
-
-```bash
-#!/bin/bash
-set -e  # Exit on first error
-
-echo "=== Cleanup Previous Outputs ==="
-rm -rf DFL/outputs/noisy_data \
-  DFL/outputs/trained_models \
-  DFL/outputs/validation_results \
-  results/tables \
-  results/figures
-
-echo "=== Step 1: Preprocessing ==="
-python preprocessing.py
-
-echo "=== Step 2: MIQP Baselines ==="
-python MIQP/MIQP_linear/MIQP_global_linear.py
-python MIQP/MIQP_piecewise/MIQP_piecewise.py
-
-echo "=== Step 3: Generate Noisy Data ==="
-python DFL/scripts/generate_noisy_data.py --variant GL --noise-levels "0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8" --random-samples
-python DFL/scripts/generate_noisy_data.py --variant PW --noise-levels "0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8" --random-samples
-
-echo "=== Step 4: Train DFL Models ==="
-python DFL/scripts/run_pretraining_gl.py
-python DFL/scripts/run_pretraining_pw.py
-python DFL/scripts/run_pretraining_pw_norec.py
-
-echo "=== Step 5: Validate DFL Models ==="
-python DFL/scripts/run_validation_gl.py
-python DFL/scripts/run_validation_pw.py
-python DFL/scripts/run_validation_pw_norec.py
-
-echo "=== Step 5C: Fixed-Weight Baseline ==="
-python DFL/scripts/run_ablation_study.py
-
-echo "=== Step 6: Aggregate Results ==="
-python results/aggregate_validation_results.py
-
-echo "=== Step 7: Generate Tables ==="
-python results/print_tables.py
-
-echo "=== Step 8: Generate Visualizations ==="
-python results/visualization.py
-
-echo "=== Pipeline Complete ==="
-```
-
-Save as `run_full_pipeline.sh`, then execute:
-
-```bash
-bash run_full_pipeline.sh
-``` -->
-
 ---
 
-## 🏗️ Repository Architecture
+## Repository Architecture
 
 ### Component Architecture
 
@@ -399,62 +332,45 @@ flowchart LR
 ### Directory Structure
 
 ```
-DFL-for-UPHES/
-│
-├── 📊 Data/                      # Input data and UPC information
-│   ├── UPCs/                     # Unit Performance Curves
-│   └── price_data_2024.csv       # Day-ahead electricity prices
-│
-├── 🧠 DFL/                        # Main DFL Framework (Refactored)
-│   ├── config/                   # Configuration classes (GL/PW/Ablation)
-│   ├── core/                     # Core DFL components
-│   │   ├── models.py             # Neural penalty predictor (LSTM)
-│   │   ├── layers.py             # Linearization, solver, simulator
-│   │   └── pipeline.py           # Recursive refinement orchestrator
-│   ├── data/                     # Data loaders and noise injection
-│   ├── training/                 # End-to-end training procedures
-│   ├── validation/               # Model evaluation
-│   ├── utils/                    # Helper utilities
-│   ├── scripts/                  # CLI entry points
-│   │   ├── generate_noisy_data.py
-│   │   ├── run_pretraining_gl.py
-│   │   ├── run_pretraining_pw.py
-│   │   ├── run_validation_gl.py
-│   │   ├── run_validation_pw.py
-│   │   └── run_ablation_study.py
-│   └── outputs/                  # All generated outputs
-│       ├── noisy_data/           # Training data (10-80% noise)
-│       ├── trained_models/       # Neural network checkpoints
-│       └── validation_results/   # Performance benchmarks
-│
-├── 🔢 MIQP/                       # MIQP Baseline Methods
-│   ├── MIQP_linear/              # Global linearization baseline
-│   └── MIQP_piecewise/           # Piecewise SOS2 baseline
-│
-├── 📦 Legacy/                     # Stable legacy implementations
-│   ├── DFL_GL-based/             # GL training-data variant
-│   ├── DFL_PW-based/             # PW training-data variant
-│   └── DFL_no-NN/                # Ablation study baseline
-│
-├── 📈 results/                    # Publication outputs
-│   ├── tables/                   # LaTeX & CSV comparison tables
-│   ├── figures/                  # PDF & PNG visualizations
-│   ├── print_tables.py           # Table generation script
-│   └── visualization.py          # Visualization script
-│
-├── 🔬 linearization_error/        # Approximation accuracy analysis
-├── 📚 Library/                    # System configuration files
-├── 📄 preprocessing.py            # Preprocessing script
-└── 📄 preprocess.pkl              # Preprocessed UPC data
+DFL-UPHES/
+├── Data/                     # Input data and UPC information
+│   ├── UPCs/                 # Unit Performance Curves
+│   └── price_data_2024.csv   # Day-ahead electricity prices
+├── DFL/                      # Main DFL framework
+│   ├── config/               # Configuration classes (GL/PW/Ablation)
+│   ├── core/                 # Core DFL components
+│   │   ├── models.py         # Neural penalty predictor (LSTM)
+│   │   ├── layers.py         # Linearization, solver, simulator
+│   │   └── pipeline.py       # Recursive refinement orchestrator
+│   ├── data/                 # Data loaders and noise injection
+│   ├── training/             # End-to-end training procedures
+│   ├── validation/           # Model evaluation
+│   ├── utils/                # Helper utilities
+│   ├── scripts/              # CLI entry points
+│   └── outputs/              # All generated outputs
+│       ├── noisy_data/       # Training data (10-80% noise)
+│       ├── trained_models/   # Neural network checkpoints
+│       └── validation_results/  # Performance benchmarks
+├── MIQP/                     # MIQP baseline methods (requires Gurobi)
+│   ├── MIQP_linear/          # Global linearization baseline
+│   └── MIQP_piecewise/       # Piecewise SOS2 baseline
+├── Library/                  # System configuration files
+├── docs/                     # Tutorial notebook and architecture diagrams
+├── figs/                     # README figures
+├── linearization_error/      # Approximation accuracy analysis
+├── results/                  # Publication tables and figures
+├── preprocessing.py          # Preprocessing script
+├── preprocess.pkl            # Preprocessed UPC data
+└── requirements.txt          # Python dependencies
 ```
 
 ---
 
-## 📓 Interactive Tutorial
+## Interactive Tutorial
 
 Explore the framework hands-on with our Jupyter notebook:
 
-📔 **[DFL-UPHES Interactive Tutorial](docs/dfl_uphes_mvp.ipynb)**
+**[DFL-UPHES Interactive Tutorial](docs/dfl_uphes_mvp.ipynb)**
 
 The notebook covers:
 - Problem formulation and motivation
@@ -465,7 +381,7 @@ The notebook covers:
 
 ---
 
-## 🛠️ Advanced Usage
+## Advanced Usage
 
 ### Parallel Processing Options
 
@@ -509,13 +425,13 @@ python DFL/scripts/generate_noisy_data.py --variant GL --noise-levels "0.1,0.2,0
 
 ---
 
-## 🔍 Understanding Results
+## Understanding Results
 
 ### Key Metrics
 
-- **Ex-post Profit (€)**: Revenue minus costs and penalties (higher is better)
-- **System Imbalance (€)**: Penalty for power deviations from schedule (lower is better)
-- **Volume Violations (€)**: Penalty for reservoir constraint violations (lower is better)
+- **Ex-post Profit (EUR)**: Revenue minus costs and penalties (higher is better)
+- **System Imbalance (EUR)**: Penalty for power deviations from schedule (lower is better)
+- **Volume Violations (EUR)**: Penalty for reservoir constraint violations (lower is better)
 - **Computation Time (s)**: Wall-clock time for optimization (lower is better)
 
 ### Output Locations
@@ -529,9 +445,7 @@ python DFL/scripts/generate_noisy_data.py --variant GL --noise-levels "0.1,0.2,0
 
 ---
 
-## 🐛 Troubleshooting
-
-### Common Issues
+## Troubleshooting
 
 **Missing preprocess.pkl**:
 ```bash
@@ -565,39 +479,7 @@ python DFL/scripts/run_pretraining_gl.py --n-jobs 4
 
 ---
 
-## 📚 Documentation
-
-### Core Documentation
-
-- 📋 [**DFL/README.md**](DFL/README.md) - DFL framework-specific documentation
-- 📊 [**docs/repository_graphs.md**](docs/repository_graphs.md) - Mermaid diagrams and architecture
-- 📓 [**docs/dfl_uphes_mvp.ipynb**](docs/dfl_uphes_mvp.ipynb) - Interactive tutorial notebook
-
-<!-- ### Legacy vs. Refactored Code
-
-This repository contains both refactored and legacy implementations:
-
-**Refactored Framework** (`DFL/`):
-- ✅ Modular, configuration-driven design
-- ✅ Clean separation of concerns
-- ✅ Easy to extend and modify
-- ⚠️ Actively maintained, may contain bugs
-
-**Legacy Implementations** (`DFL_GL-based/`, `DFL_PW-based/`, `DFL_no-NN/`):
-- ✅ Stable and tested
-- ✅ Recommended for reproducible results
-- ✅ Original paper validation
-- ⚠️ Less structured, harder to modify
-
-**When to use legacy**: Guaranteed reproducible results, running full experiments from scratch, original paper validation.
-
-**When to use refactored**: Extending the framework, adding new variants, modifying configurations, modern codebase maintenance.
-
-Both use identical algorithms and parameters for consistency. -->
-
----
-
-## 📖 Citation
+## Citation
 
 If you use this code in your research, please cite our paper:
 
@@ -612,39 +494,28 @@ If you use this code in your research, please cite our paper:
 }
 ```
 
-### Paper Reference
-
 **"Accelerating Underground Pumped Hydro Energy Storage Scheduling with Decision-Focused Learning"**
 IEEE Transactions on Sustainable Energy (Early Access): [https://doi.org/10.1109/TSTE.2026.3722492](https://doi.org/10.1109/TSTE.2026.3722492)
 Accepted version (open access) on arXiv: [https://arxiv.org/abs/2512.20880](https://arxiv.org/abs/2512.20880)
 
-
 ---
 
-## 📄 License
+## License
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
 
 ---
 
-## 📧 Contact
+## Contact
 
 For questions, issues, or collaboration opportunities:
 - **Open an issue** on this repository
-- **Email**: [hzheng39@jh.edu](hzheng39@jh.edu)
+- **Email**: [hzheng39@jh.edu](mailto:hzheng39@jh.edu)
 
 ---
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
-This work was supported by [Ralph O'Connor Sustainable Energy Institute](https://energyinstitute.jhu.edu/).
+This work was supported by the [Ralph O'Connor Sustainable Energy Institute](https://energyinstitute.jhu.edu/).
 
-We thank the open-source community for the excellent tools that made this work possible:
-- PyTorch for deep learning
-- CVXPY and CVXPYLayers for differentiable optimization
-
----
-
-<p align="center">
-  <b>⭐ If you find this work useful, please consider starring the repository! ⭐</b>
-</p>
+We thank the open-source community for the excellent tools that made this work possible, in particular PyTorch for deep learning and CVXPY and CVXPYLayers for differentiable optimization.
