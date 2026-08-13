@@ -378,6 +378,12 @@ class OptiLayer:
         return p_opt_thresholded, q_opt_thresholded, h_opt, v_opt, optimized_profit, optimized_objective
 
 
+def _ste_clamp(x, min_val, max_val):
+    """STE for clamping: forward clamps, backward is identity."""
+    x_clamped = torch.clamp(x, min=min_val, max=max_val)
+    return x + (x_clamped - x).detach()
+
+
 class SimulationLayer:
     """
     Physical simulation layer with operational constraints.
@@ -434,14 +440,14 @@ class SimulationLayer:
             if p_current > 0.5:  # Turbine mode
                 p_min_turb = self.params.pos_min(h_current)  # Use current head
                 p_max_turb = self.params.pos_max(h_current)  # Use current head
-                p_clamped = torch.clamp(p_current, min=p_min_turb, max=p_max_turb)
+                p_clamped = _ste_clamp(p_current, min_val=p_min_turb, max_val=p_max_turb)
                 q_candidate = self.params.predict_q_poly(p_clamped.unsqueeze(0), h_current.unsqueeze(0)).squeeze(0)
 
             # c) For pump mode (p_current<0), clamp p between neg_min(h) and neg_max(h)
             elif p_current < -0.5:  # Pump mode
                 p_min_pump = self.params.neg_min(h_current)  # Use current head
                 p_max_pump = self.params.neg_max(h_current)  # Use current head
-                p_clamped = torch.clamp(p_current, min=p_min_pump, max=p_max_pump)
+                p_clamped = _ste_clamp(p_current, min_val=p_min_pump, max_val=p_max_pump)
                 q_candidate = self.params.predict_q_poly(p_clamped.unsqueeze(0), h_current.unsqueeze(0)).squeeze(0)
 
             # Update volume: v_next = v_current + q * 3600 (seconds in an hour)
@@ -450,17 +456,19 @@ class SimulationLayer:
             # Check if volume is within bounds
             out_of_bounds = (v_next > self.params.max_vol_up) | (v_next < self.params.min_vol_low)
 
-            # If out of bounds, set to idle mode
-            if out_of_bounds:
-                p_final = torch.zeros_like(p_current)
-                q_final = torch.zeros_like(q_candidate)
-                v_next = v_current  # No change to volume
-                h_next = h_current  # No change to head
-            else:
-                p_final = p_clamped if p_current != 0 else torch.zeros_like(p_current)
-                q_final = q_candidate
-                # Update head based on new volume
-                h_next = self.params.v_low_to_h_fitted(v_next)
+            # If out of bounds, force idle mode via STE-wrapped torch.where
+            # Forward: hard zero-out; Backward: identity through the non-oob values
+            h_next_feasible = self.params.v_low_to_h_fitted(v_next)
+
+            p_final_hard = torch.where(out_of_bounds, torch.zeros_like(p_clamped), p_clamped)
+            q_final_hard = torch.where(out_of_bounds, torch.zeros_like(q_candidate), q_candidate)
+            v_next_hard  = torch.where(out_of_bounds, v_current, v_next)
+
+            p_final = p_clamped   + (p_final_hard - p_clamped).detach()
+            q_final = q_candidate + (q_final_hard - q_candidate).detach()
+            v_next  = v_next      + (v_next_hard  - v_next).detach()
+
+            h_next = self.params.v_low_to_h_fitted(v_next)
 
             # Append states for this hour
             p_list.append(p_final)
