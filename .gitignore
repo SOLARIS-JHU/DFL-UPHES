@@ -200,3 +200,6 @@ AGENTS.md
 .windsurf/
 prompts/
 *.prompt
+
+# Paper workspace
+/paper/
