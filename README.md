@@ -35,24 +35,24 @@ $$
 \end{aligned}
 $$
 
-Here $p_t$, $q_t$, $h_t$, and $v_t$ denote net power, water flow, hydraulic head, and stored volume. The non-convex physics and binary mode decisions make the problem an intractable MINLP: its piecewise (SOS2) MIQP approximation is accurate but requires about half an hour per schedule, while the fast global-linear approximation sacrifices significant profit.
+Here $p_t$, $q_t$, $h_t$, and $v_t$ denote net power, water flow, hydraulic head, and stored volume, and $f_m^{\mathrm{UPC}}$ are the unit performance curves (UPCs) of the reversible Francis pump-turbine. The non-convex physics and binary mode decisions make the problem an intractable Mixed-Integer Nonlinear Program (MINLP). Its piecewise Mixed-Integer Quadratic Program approximation (MIQP-PW), built on special ordered sets of type 2 (SOS2), is accurate but requires about half an hour per schedule, while the fast global-linear approximation (MIQP-GL) sacrifices significant profit.
 
 ## The DFL Framework
 
 Decision-Focused Learning (DFL) trains models directly on the downstream decision objective. Our DFL framework refines any feasible schedule through recursive local linearization guided by learned penalty weights, and since every step is differentiable, the weight predictor is trained end-to-end on the ex-post profit of its schedules evaluated under the true nonlinear dynamics.
 
 <p align="center">
-  <img src="figs/DFL.jpg" width="90%" alt="DFL computational graph">
+  <img src="figs/DFL.jpg" width="70%" alt="DFL computational graph">
 </p>
 
 The pipeline chains four differentiable components:
 
-1. **Neural penalty predictor** (`DFL/core/models.py`): an LSTM maps prices and the warm-start schedule to time-varying penalty weights, which act as learned trust-region sizes.
+1. **Neural penalty predictor** (`DFL/core/models.py`): a long short-term memory (LSTM) network maps prices and the warm-start schedule to time-varying penalty weights, which act as learned trust-region sizes.
 2. **Local linearization layer** (`DFL/core/layers.py`): first-order Taylor expansions of the UPC and volume-head relationships around the current operating point.
-3. **Differentiable convex optimizer** (`DFL/core/layers.py`): a CVXPYLayers QP refines the schedule under the linearized physics; modes are fixed by the warm-start, so no integer variables remain.
+3. **Differentiable convex optimizer** (`DFL/core/layers.py`): a CVXPYLayers quadratic program (QP) refines the schedule under the linearized physics; modes are fixed by the warm-start, so no integer variables remain.
 4. **Differentiable physical simulator** (`DFL/core/layers.py`): re-evaluates the schedule under the true nonlinear dynamics; the resulting ex-post profit is the training loss.
 
-Steps 2-4 repeat for K = 7 recursive iterations with geometrically growing penalties (`DFL/core/pipeline.py`):
+Steps 2-4 repeat for K recursive iterations with geometrically growing penalties (`DFL/core/pipeline.py`):
 
 ```mermaid
 flowchart LR
@@ -78,13 +78,13 @@ flowchart LR
 
 ## Results at a Glance
 
-Evaluated on 19 representative Belgian day-ahead price profiles (2024, Elia):
+Evaluated on 19 representative Belgian day-ahead price profiles from the transmission system operator Elia (2024):
 
 | Deployment mode | Warm-start source | Outcome |
 |---|---|---|
 | Refiner | Piecewise MIQP solution | +1.1% profit over MIQP-PW for about 1.2 s of post-processing |
 | Real-time scheduler | Fast global-linear MIQP | 3.87 s end-to-end (about 300x speedup) within 3.6% of MIQP-PW profit |
-| MIP-free deployment | Historical schedule lookup (no MIQP solver) | 92% of MIQP-PW profit at a 989x speedup on held-out days |
+| Mixed-integer-programming-free (MIP-free) deployment | Historical schedule lookup | 92% of MIQP-PW profit at a 989x speedup on held-out days |
 
 <p align="center">
   <img src="results/figures/profit_density_main_contribution.png" width="80%" alt="Ex-post profit distributions, DFL vs MIQP baselines">
@@ -93,7 +93,7 @@ Evaluated on 19 representative Belgian day-ahead price profiles (2024, Elia):
 Ablations: removing the neural penalty predictor costs 2.8% profit, removing recursion costs 1.0%. DFL profit stays nearly constant as warm-start corruption grows from 10% to 80%, while MIQP baselines degrade by 12 to 23%:
 
 <p align="center">
-  <img src="results/figures/noise_robustness_ablation_study.png" width="60%" alt="Robustness to warm-start noise">
+  <img src="results/figures/noise_robustness_ablation_study.png" width="50%" alt="Robustness to warm-start noise">
 </p>
 
 ---
@@ -114,7 +114,7 @@ python preprocessing.py   # one-time: rebuilds preprocess.pkl for your dill vers
 ## Quick Start
 
 ```bash
-# 1. Generate training data (perturbed MIQP schedules)
+# 1. Generate training data (perturbed MIQP schedules, global-linear (GL) variant)
 python DFL/scripts/generate_noisy_data.py --variant GL --random-samples
 
 # 2. Train the DFL model
@@ -173,8 +173,8 @@ All commands run from the repository root.
 **1. MIQP baselines** (requires Gurobi, several hours):
 
 ```bash
-python MIQP/MIQP_linear/MIQP_global_linear.py     # global linearization
-python MIQP/MIQP_piecewise/MIQP_piecewise.py      # piecewise SOS2
+python MIQP/MIQP_linear/MIQP_global_linear.py     # global linearization (GL)
+python MIQP/MIQP_piecewise/MIQP_piecewise.py      # piecewise SOS2 (PW)
 ```
 
 **2. Training data** (noise levels 10% to 80% plus the random-sampling variant used for headline results):
@@ -200,7 +200,7 @@ Use `--n-jobs` to control parallelism (default 20 workers; `--n-jobs 1` for debu
 python DFL/scripts/run_validation_gl.py
 python DFL/scripts/run_validation_pw.py
 python DFL/scripts/run_validation_pw_norec.py
-python DFL/scripts/run_ablation_study.py          # fixed-weight (no-NN) ablation
+python DFL/scripts/run_ablation_study.py          # fixed-weight ablation (no neural network)
 ```
 
 Custom price scenarios can be passed with `--price-file ./my_prices.csv`.
@@ -221,7 +221,7 @@ python results/visualization.py                   # publication figures
 | DFL vs MIQP profit and timing (Table III, Fig. 4) | Training and validation scripts above, then `results/` scripts |
 | Noise robustness (Fig. 5) | `DFL/scripts/generate_noisy_data.py`, `DFL/scripts/evaluate_noisy_miqp.py`, `results/visualization.py` |
 | Component ablations (Table V, Fig. 6) | `DFL/scripts/run_pretraining_pw_norec.py`, `DFL/scripts/run_ablation_study.py` |
-| IPOPT NLP baselines (Tables III, VI) | `DFL/scripts/run_ipopt_comparison.py` |
+| IPOPT nonlinear programming baselines (Tables III, VI) | `DFL/scripts/run_ipopt_comparison.py` |
 | Warm-start mode-error robustness (Fig. 7) | `DFL/scripts/run_mode_disagreement_audit.py`, `DFL/scripts/run_mode_perturbation.py`, `DFL/scripts/plot_mode_perturbation.py` |
 | MIP-free deployment on held-out days (Table VI) | `DFL/scripts/select_oos_days.py`, then validation with `--price-file Data/price_data_2024_oos.csv` |
 | Weight-predictor architecture comparison | `DFL/scripts/run_architecture_comparison.py`, `DFL/scripts/run_validation_architecture_comparison.py` |
