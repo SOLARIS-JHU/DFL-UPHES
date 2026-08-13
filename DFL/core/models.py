@@ -2,7 +2,7 @@
 Neural network models for weight prediction.
 
 This module contains models that predict penalty weights for the optimization:
-- BoundedLogWeightPredictor: LSTM/RNN/FC network predicting weights in log-domain
+- BoundedLogWeightPredictor: LSTM/RNN/FC/BILSTM/CNN/TRANSFORMER network predicting weights in log-domain
 - FixedWeightConfig: Fixed weights for ablation studies (no neural network)
 """
 
@@ -34,7 +34,7 @@ class BoundedLogWeightPredictor(nn.Module):
             num_layers: Number of recurrent layers
             dropout: Dropout rate (only applied if num_layers > 1)
             time_horizon: Number of time periods (default 24 hours)
-            archetype: Network architecture ('LSTM', 'RNN', or 'FC')
+            archetype: Network architecture ('LSTM', 'RNN', 'FC', 'BILSTM', 'CNN', or 'TRANSFORMER')
             init_w_p, init_w_q, init_w_h: Initial weight values
             w_p_min, w_p_max: Bounds for power deviation penalty weight
             w_q_min, w_q_max: Bounds for flow deviation penalty weight
@@ -85,6 +85,41 @@ class BoundedLogWeightPredictor(nn.Module):
                 dropout=dropout if num_layers > 1 else 0,
                 batch_first=True
             )
+        elif self.archetype == 'BILSTM':
+            self.rnn = nn.LSTM(
+                input_size=input_size,
+                hidden_size=hidden_size,
+                num_layers=num_layers,
+                dropout=dropout if num_layers > 1 else 0,
+                batch_first=True,
+                bidirectional=True
+            )
+            self.bidirectional_proj = nn.Linear(hidden_size * 2, hidden_size)
+        elif self.archetype == 'CNN':
+            channels = [32, 64, hidden_size]
+            cnn_layers = []
+            in_ch = input_size
+            for i, out_ch in enumerate(channels):
+                cnn_layers += [
+                    nn.Conv1d(in_ch, out_ch, kernel_size=3, padding=1),
+                    nn.BatchNorm1d(out_ch),
+                    nn.ReLU(),
+                ]
+                if i < len(channels) - 1:
+                    cnn_layers.append(nn.Dropout(dropout))
+                in_ch = out_ch
+            self.cnn = nn.Sequential(*cnn_layers)
+            self.cnn_pool = nn.AdaptiveAvgPool1d(1)
+        elif self.archetype == 'TRANSFORMER':
+            d_model = hidden_size
+            self.input_proj = nn.Linear(input_size, d_model)
+            self.pos_encoding = nn.Parameter(torch.randn(1, time_horizon, d_model) * 0.02)
+            encoder_layer = nn.TransformerEncoderLayer(
+                d_model=d_model, nhead=8, dim_feedforward=d_model * 4,
+                dropout=dropout, batch_first=True, activation='gelu'
+            )
+            self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
+            self.transformer_norm = nn.LayerNorm(d_model)
         elif self.archetype == 'FC':
             self.fc_layers = nn.Sequential(
                 nn.Linear(input_size * time_horizon, hidden_size * 2),
@@ -95,7 +130,8 @@ class BoundedLogWeightPredictor(nn.Module):
                 nn.Dropout(dropout)
             )
         else:
-            raise ValueError(f"Unsupported archetype: {archetype}. Choose from 'LSTM', 'RNN', or 'FC'.")
+            raise ValueError(f"Unsupported archetype: {archetype}. "
+                             f"Choose from 'LSTM', 'RNN', 'FC', 'BILSTM', 'CNN', or 'TRANSFORMER'.")
 
         # Output layer for log-weights
         self.output = nn.Linear(hidden_size, 3 * time_horizon)
@@ -109,8 +145,11 @@ class BoundedLogWeightPredictor(nn.Module):
     def _init_weights(self):
         """Initialize weights based on the selected architecture"""
         for name, param in self.named_parameters():
+            if 'pos_encoding' in name or 'norm' in name or 'bn' in name:
+                continue
             if 'weight' in name and 'output' not in name:
-                nn.init.xavier_normal_(param, gain=1.5)
+                if param.dim() >= 2:
+                    nn.init.xavier_normal_(param, gain=1.5)
             elif 'bias' in name and 'output' not in name:
                 nn.init.constant_(param, 0.1)
 
@@ -167,6 +206,21 @@ class BoundedLogWeightPredictor(nn.Module):
                 output, _ = self.rnn(x, h0)
 
             last_output = output[:, -1, :]
+        elif self.archetype == 'BILSTM':
+            h0 = torch.zeros(self.num_layers * 2, x.size(0), self.hidden_size, device=x.device)
+            c0 = torch.zeros(self.num_layers * 2, x.size(0), self.hidden_size, device=x.device)
+            output, _ = self.rnn(x, (h0, c0))
+            last_output = self.bidirectional_proj(output[:, -1, :])
+        elif self.archetype == 'CNN':
+            # x: [batch, seq_len, features] -> [batch, features, seq_len]
+            x_cnn = x.transpose(1, 2)
+            x_cnn = self.cnn(x_cnn)
+            last_output = self.cnn_pool(x_cnn).squeeze(-1)
+        elif self.archetype == 'TRANSFORMER':
+            x_proj = self.input_proj(x) + self.pos_encoding
+            x_enc = self.transformer_encoder(x_proj)
+            x_enc = self.transformer_norm(x_enc)
+            last_output = x_enc.mean(dim=1)
         else:  # FC architecture
             batch_size = x.size(0)
             x_flat = x.reshape(batch_size, -1)

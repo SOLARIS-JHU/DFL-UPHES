@@ -33,7 +33,7 @@ class DFLConfig:
 
         # Neural network settings
         self.use_neural_network = True
-        self.architecture = 'LSTM'  # Options: 'LSTM', 'RNN', 'FC'
+        self.architecture = 'LSTM'  # Options: 'LSTM', 'RNN', 'FC', 'BILSTM', 'CNN', 'TRANSFORMER'
         self.num_layers = 3
         self.hidden_size = 128
         self.dropout = 0.2
