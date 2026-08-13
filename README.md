@@ -35,15 +35,17 @@ $$
 \end{aligned}
 $$
 
-Here $p_t$, $q_t$, $h_t$, and $v_t$ denote net power, water flow, hydraulic head, and stored volume. The non-convex physics and binary mode decisions make the problem an intractable MINLP: its piecewise (SOS2) MIQP approximation is accurate but requires about 20 minutes per schedule, while the fast global-linear approximation sacrifices significant profit.
+Here $p_t$, $q_t$, $h_t$, and $v_t$ denote net power, water flow, hydraulic head, and stored volume. The non-convex physics and binary mode decisions make the problem an intractable MINLP: its piecewise (SOS2) MIQP approximation is accurate but requires about half an hour per schedule, while the fast global-linear approximation sacrifices significant profit.
 
 ## The DFL Framework
 
-Decision-Focused Learning (DFL) trains the scheduling pipeline end-to-end on ex-post profit rather than prediction error:
+Conventional two-stage pipelines train a model to minimize prediction error and assume that accurate predictions translate into good decisions; in systems with non-convex physics and asymmetric costs, this assumption fails. Decision-Focused Learning (DFL) instead embeds the optimization into the training loop and learns to maximize the decision objective itself. Here, the entire scheduling pipeline is differentiable, so the neural network is trained end-to-end on the ex-post profit of its schedules under the true nonlinear dynamics, navigating the accuracy-computation trade-off that the MIQP approximations cannot.
 
 <p align="center">
   <img src="figs/DFL.svg" width="90%" alt="DFL computational graph">
 </p>
+
+The pipeline chains four differentiable components:
 
 1. **Neural penalty predictor** (`DFL/core/models.py`): an LSTM maps prices and the warm-start schedule to time-varying penalty weights, which act as learned trust-region sizes.
 2. **Local linearization layer** (`DFL/core/layers.py`): first-order Taylor expansions of the UPC and volume-head relationships around the current operating point.
