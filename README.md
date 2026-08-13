@@ -602,18 +602,21 @@ Both use identical algorithms and parameters for consistency. -->
 If you use this code in your research, please cite our paper:
 
 ```bibtex
-@article{zheng2025accelerating,
+@article{zheng2026accelerating,
   title={Accelerating Underground Pumped Hydro Energy Storage Scheduling with Decision-Focused Learning},
   author={Zheng, Honghui and Favaro, Pietro and Dvorkin, Yury and Drgo{\v{n}}a, J{\'a}n},
-  journal={arXiv preprint arXiv:2512.20880},
-  year={2025}
+  journal={IEEE Transactions on Sustainable Energy},
+  year={2026},
+  note={Early Access},
+  doi={10.1109/TSTE.2026.3722492}
 }
 ```
 
 ### Paper Reference
 
 **"Accelerating Underground Pumped Hydro Energy Storage Scheduling with Decision-Focused Learning"**
-arXiv preprint at [https://arxiv.org/abs/2512.20880](https://arxiv.org/abs/2512.20880)
+IEEE Transactions on Sustainable Energy (Early Access): [https://doi.org/10.1109/TSTE.2026.3722492](https://doi.org/10.1109/TSTE.2026.3722492)
+Accepted version (open access) on arXiv: [https://arxiv.org/abs/2512.20880](https://arxiv.org/abs/2512.20880)
 
 
 ---
