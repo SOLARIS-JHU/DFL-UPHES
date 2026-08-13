@@ -314,10 +314,10 @@ class SimulationLayer:
         return total_profit, SI_penalty, volume_penalty, operating_cost
 
 
-def run_milp_optimization():
+def run_milp_optimization(price_file=None, output_suffix=""):
     """Run MILP optimization for all days in price database."""
     print("Loading price data...")
-    price_data = read_price_data()
+    price_data = read_price_data(price_file)
     
     detailed_results = []
     benchmark_results = []
@@ -411,11 +411,18 @@ def run_milp_optimization():
             continue
 
     # Save results
-    pd.DataFrame(detailed_results).to_csv("MILP_global_linear_results.csv", index=False)
-    pd.DataFrame(benchmark_results).to_csv("MILP_global_linear_benchmark.csv", index=False)
+    pd.DataFrame(detailed_results).to_csv(f"MILP_global_linear_results{output_suffix}.csv", index=False)
+    pd.DataFrame(benchmark_results).to_csv(f"MILP_global_linear_benchmark{output_suffix}.csv", index=False)
 
     print(f"\nDone! {len(detailed_results)} hourly records saved")
 
 
 if __name__ == "__main__":
-    run_milp_optimization()
+    import argparse
+    parser = argparse.ArgumentParser(description='MIQP Global Linear Optimization')
+    parser.add_argument('--price-file', type=str, default=None,
+                        help='Path to price data CSV file')
+    parser.add_argument('--output-suffix', type=str, default='',
+                        help='Suffix for output file names (e.g., _oos)')
+    args = parser.parse_args()
+    run_milp_optimization(price_file=args.price_file, output_suffix=args.output_suffix)
