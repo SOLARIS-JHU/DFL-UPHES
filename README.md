@@ -9,7 +9,9 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License: MIT"></a>
 </p>
 
-**Decision-Focused Learning for Underground Pumped Hydro Energy Storage Day-Ahead Scheduling**
+<p align="center"><b>Decision-Focused Learning for Underground Pumped Hydro Energy Storage Day-Ahead Scheduling</b></p>
+
+<p align="center">Honghui Zheng, Pietro Favaro, Yury Dvorkin, and Ján Drgoňa</p>
 
 Companion code for the paper ["Accelerating Underground Pumped Hydro Energy Storage Scheduling with Decision-Focused Learning"](https://doi.org/10.1109/TSTE.2026.3722492), accepted at *IEEE Transactions on Sustainable Energy*.
 
