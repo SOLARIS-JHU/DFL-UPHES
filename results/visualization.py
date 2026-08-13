@@ -51,7 +51,8 @@ plt.rcParams.update({
 
 LINESTYLES = {
     'DFL-GL': '-', 'DFL': '-', 'MIQP-Linear': '-',
-    'MIQP-PW': '-', 'No-NN': '-', 'DFL-NR': '-'
+    'MIQP-PW': '-', 'No-NN': '-', 'DFL-NR': '-',
+    'IPOPT-NLP': '--'
 }
 
 # File paths (centralized DFL outputs)

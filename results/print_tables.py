@@ -251,6 +251,10 @@ def generate_comprehensive_table(df_miqp_gl, df_miqp_pw, df_dfl):
                 method_label = 'DFL (PW-no-Rec)'
             elif method_type == 'DFL-PW-no-NN' or method_type.startswith('No-NN'):
                 method_label = 'DFL (PW-no-NN)'
+            elif method_type == 'IPOPT-NLP-PW':
+                method_label = 'IPOPT-NLP (PW)'
+            elif method_type == 'IPOPT-NLP-GL':
+                method_label = 'IPOPT-NLP (GL)'
             elif method_type == 'MIQP-GL-noised':
                 method_label = 'MIQP-GL-noised'
             elif method_type == 'MIQP-PW-noised':

@@ -297,6 +297,42 @@ def main():
     else:
         print("✗ No PW-no-NN records found")
 
+    # Process IPOPT-NLP with PW warm-starts
+    print("\n" + "-"*80)
+    print("Processing IPOPT-NLP-PW validation results...")
+    print("-"*80)
+    ipopt_pw_records = aggregate_method_results(
+        validation_base,
+        'IPOPT-NLP-PW',
+        'IPOPT-NLP',
+        data_prefixes=['MIQP_piecewise_results'],
+        arch_filter={'IPOPT'},
+    )
+    if ipopt_pw_records:
+        ipopt_pw_df = pd.concat(ipopt_pw_records, ignore_index=True)
+        print(f"  Aggregated {len(ipopt_pw_df)} IPOPT-NLP-PW records")
+        all_dfs.append(ipopt_pw_df)
+    else:
+        print("  No IPOPT-NLP-PW records found")
+
+    # Process IPOPT-NLP with GL warm-starts
+    print("\n" + "-"*80)
+    print("Processing IPOPT-NLP-GL validation results...")
+    print("-"*80)
+    ipopt_gl_records = aggregate_method_results(
+        validation_base,
+        'IPOPT-NLP-GL',
+        'IPOPT-NLP',
+        data_prefixes=['MIQP_linear_results'],
+        arch_filter={'IPOPT'},
+    )
+    if ipopt_gl_records:
+        ipopt_gl_df = pd.concat(ipopt_gl_records, ignore_index=True)
+        print(f"  Aggregated {len(ipopt_gl_df)} IPOPT-NLP-GL records")
+        all_dfs.append(ipopt_gl_df)
+    else:
+        print("  No IPOPT-NLP-GL records found")
+
     # Process noisy MIQP-GL evaluations
     print("\n" + "-"*80)
     print("Processing noisy MIQP-GL evaluations...")

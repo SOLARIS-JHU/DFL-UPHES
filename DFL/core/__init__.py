@@ -4,6 +4,7 @@ from .parameters import HydroParameters
 from .layers import TaylorRegressionLayer, OptiLayer, SimulationLayer
 from .models import BoundedLogWeightPredictor, FixedWeightConfig
 from .pipeline import RecursiveLinearizationPipeline, BaselineRecursiveLinearization
+from .ipopt_solver import IPOPTHydroSolver
 
 __all__ = [
     'HydroParameters',
@@ -13,5 +14,6 @@ __all__ = [
     'BoundedLogWeightPredictor',
     'FixedWeightConfig',
     'RecursiveLinearizationPipeline',
-    'BaselineRecursiveLinearization'
+    'BaselineRecursiveLinearization',
+    'IPOPTHydroSolver'
 ]
