@@ -296,4 +296,4 @@ For questions, issues, or collaboration opportunities, open an issue on this rep
 
 This work was supported by the [Ralph O'Connor Sustainable Energy Institute](https://energyinstitute.jhu.edu/).
 
-Built on PyTorch, CVXPY, and CVXPYLayers.
+Built on [PyTorch](https://pytorch.org/), [CVXPY](https://www.cvxpy.org/), and [CVXPYLayers](https://github.com/cvxgrp/cvxpylayers).
